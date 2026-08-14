@@ -1,0 +1,20 @@
+{
+  "vinyl": {
+    "name": "黑胶",
+    "side": ["A", "B"],
+    "minutes_per_side": 22,
+    "shape": "circle"
+  },
+  "cassette": {
+    "name": "磁带",
+    "side": ["A", "B"],
+    "minutes_per_side": 30,
+    "shape": "rect"
+  },
+  "cd": {
+    "name": "CD",
+    "side": ["A"],
+    "minutes_per_side": 80,
+    "shape": "circle"
+  }
+}

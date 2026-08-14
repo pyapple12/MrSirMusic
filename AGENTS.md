@@ -6,6 +6,7 @@
 
 - 入口 `main.py`：`python main.py`（GUI 默认）；`python main.py --version` 打印版本；版本常量 `VERSION` 单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用
 - 没有测试/lint 命令。改动后验证：`.\.venv\Scripts\python.exe -c "import main, modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, ui.main_window, ui.bridge.event_bridge, ui.themes, utils.logger, utils.file_utils, utils.retry, utils.convert"`。不要直接跑 GUI 验证（会弹窗阻塞）
+- 全量探针回归（.temp/probe_*.py，offscreen）：`$env:QT_QPA_PLATFORM="offscreen"; foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a9_playback','probe_a10_bridge','probe_a11_ui','probe_a12_widgets','probe_a13_effects','probe_a14_integration')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归
 - GUI 无头初始化验证（不弹窗）：`$env:QT_QPA_PLATFORM="offscreen"; .\.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; from ui.main_window import MainWindow; app = QApplication([]); w = MainWindow(); print('GUI init OK')"`
 - 依赖（`requirements.txt`）：PySide6、mutagen 等，按需添加（见 z.plan.md）
 
@@ -25,7 +26,7 @@
   - **用户配置**（`config/settings.py`，可读写）：AppConfig dataclass（拟真度档位/自动翻面），存 `config/user_config.json`
 - 三个注册表机制：载体类型（item_types.json）、解码器（`modules/playback/decoders/`，新格式=加一个模块）、封面 providers（`modules/cover/`，network 留接口未实现）
 - `music/` 是**用户核心数据目录**（非缓存）：`items.db`（物品库 SQLite）+ `covers/`（封面实体文件）；gitignore 忽略内容但保留目录（`music/*` + `!music/.gitkeep`）；删除前需确认（不同于可随手清理的缓存）
-- **参数约定**：可调参数一律走 `config/static/*.json`，禁止代码硬编码；版本号唯一来源为 `base.json` 的 `version` 字段
+- **参数约定**：可调参数一律走 `config/static/*.json`，禁止代码硬编码；版本号唯一来源为 `base.json` 的 `version` 字段，格式四段式 `X.Y.Z.P`：`X.Y` 版本主线（第一版 `0.1`）、`Z` 内容版本（新增内容/重构/小版本更新时 `+1`）、`P` 审计轮次（每次审计修复 `+1`）；`Z` 递增时 `P` 归零重新计数
 - `main.py` 收编入口分发（argparse + GUI）；模块间顶层 import，不要使用函数内延迟 import（PySide6 等重依赖除外，可在函数内导入）
 - `.reference/` 目录是外部项目的 git clone（浅克隆），**不纳入本仓库版本控制**；需要更新时重新 clone
 - 项目规划与方案文档在 `z.plan.md`，源码研读报告在 `w.study.md`，任务清单在 `x.progress.md`
@@ -86,11 +87,11 @@
 
 ### Commit 提交规范
 
-- **标题行**：`<type>: V<版本>，<摘要>`——版本号与 base.json `version` 字段一致；摘要一句话概括核心（可用括号列重点）
+- **标题行**：`<type>: V<版本>，<摘要>`——版本号与 base.json `version` 字段一致（四段式 `X.Y.Z.P` 全写，如 `V0.1.0.1`）；摘要一句话概括核心（可用括号列重点）
 - **type 全集**（conventional 风格）：
   - `feat` 新功能 / `fix` 修复 / `refactor` 重构（行为不变）/ `perf` 性能
   - `docs` 文档 / `test` 测试 / `style` 格式 / `build` 构建依赖 / `ci` CI / `chore` 杂项 / `revert` 回滚
-- **正文**（改动大时可选）：`- ` 列表，每个功能块一行自然中文描述，每行 ≤ 100 字符
+- **正文**（改动大时可选）：`- ` 列表，按主题分组、分组下子条目缩进，每个功能块一行自然中文描述，每行 ≤ 100 字符
 - **禁止项**：内部编号（A0.1/B2.3 等任务编号）、验证/回归数字（如"全量回归 506 项通过"）、英文混排描述
 - **提交范围**：一个版本的所有连带改动一次提交（源码 + 配置 + 文档同步）
 - **流程**：由 AI 根据 `git status`/`git diff` 核对清单并草拟 commit 内容（git add 清单 + message）→ 用户审阅后自行执行 `git add`/`git commit`/`git push`（AI 不执行 git 写操作）
@@ -98,6 +99,6 @@
 ## 操作注意
 
 - 执行命令前先检测当前 shell（Windows 下为 pwsh）：使用 PowerShell 兼容命令（`Select-String` 替代 `grep`，`Get-ChildItem` 替代 `ls` 等），避免 Linux-only 工具
-- pwsh 会话带 `-NoProfile` 不加载 `$PROFILE`，输出中文前必须先设置编码：`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;`
+- pwsh 会话带 `-NoProfile` 不加载 `$PROFILE`；**每次执行命令无条件前置**编码设置：`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;`——不做输出内容预判，一律先设再执行，杜绝 GBK 解码乱码
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 - **多模态模型约定**：拟物 UI 的视觉核对（截图/封面/磨损效果）需要读图；当前默认模型若无视觉能力（读图工具返回 `Cannot read: this model does not support image input`），需要读图的任务（UI 截图核对、效果图分析等）**必须先通知用户切换多模态模型**再执行；**未实际读到图时严禁声称"能读到"或编造图片内容**——图读失败如实报告

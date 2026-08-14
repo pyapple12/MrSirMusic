@@ -1,0 +1,23 @@
+{
+  "default_level": "refined",
+  "levels": {
+    "concise": {
+      "animations": false,
+      "wear": false,
+      "weathering": false
+    },
+    "refined": {
+      "animations": true,
+      "wear": true,
+      "weathering": false,
+      "wear_intensity": 0.3
+    },
+    "realistic": {
+      "animations": true,
+      "wear": true,
+      "weathering": true,
+      "wear_intensity": 0.6,
+      "weathering_intensity": 0.5
+    }
+  }
+}

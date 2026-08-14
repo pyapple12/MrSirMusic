@@ -1,0 +1,6 @@
+{
+  "base": "base.json",
+  "item_types": "item_types.json",
+  "effects": "effects.json",
+  "ui": "ui.json"
+}

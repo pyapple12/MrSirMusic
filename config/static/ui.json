@@ -1,0 +1,14 @@
+{
+  "window_width": 1100,
+  "window_height": 720,
+  "font_family": "Microsoft YaHei",
+  "colors": {
+    "primary": "#8B6F47",
+    "secondary": "#2C2C2C"
+  },
+  "animation": {
+    "record_spin_ms": 2000,
+    "tonearm_drop_ms": 500
+  },
+  "library_column_widths": [80, 160, 80, 120]
+}
