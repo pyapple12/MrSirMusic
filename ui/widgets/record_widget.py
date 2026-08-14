@@ -39,8 +39,9 @@ class RecordWidget(QWidget):
         return self._effects
 
     def set_item(self, item: Item) -> None:
-        # 换物品：刷新封面并重绘
+        # 换物品：先清空封面（C0.3 防旧封面残留）→ 重新加载有效封面 → 重绘
         self._item = item
+        self._cover = None
         cover = resolve_cover(item)
         if cover and Path(cover).is_file():
             pixmap = QPixmap(cover)

@@ -11,10 +11,18 @@ _logger = get_logger("playback.event_bus")
 _subscribers: dict[str, list[Callable[[Any], None]]] = {}
 
 
+def _callback_key(callback: Callable[[Any], None]) -> tuple:
+    # 回调判重键（C3.2）：bound method 按 (self, func) 身份，普通函数/lambda 按对象身份
+    if hasattr(callback, "__self__") and hasattr(callback, "__func__"):
+        return ("method", id(callback.__self__), id(callback.__func__))
+    return ("callable", id(callback))
+
+
 def subscribe(event: str, callback: Callable[[Any], None]) -> Callable[[], None]:
-    # 订阅事件（同一回调去重，B3.8）：返回退订函数（调用后不再收到该事件）
+    # 订阅事件（同一回调去重，含 bound method，C3.2）：返回退订函数（调用后不再收到该事件）
+    key = _callback_key(callback)
     callbacks = _subscribers.setdefault(event, [])
-    if callback not in callbacks:
+    if not any(_callback_key(cb) == key for cb in callbacks):
         callbacks.append(callback)
     return lambda: _unsubscribe(event, callback)
 

@@ -207,3 +207,50 @@
 - [x] B4.1 全量探针回归 —— 修复后跑 14 个探针全量 + 冒烟 + --version；验证：全 PASS（✅ 完成：18 探针（A1-A14 + B0-B3）全部 PASS；冒烟 smoke OK；--version 0.1.0.0）
 - [x] B4.2 端到端复走 —— 重跑 probe_a14_integration（含新接线功能：主题/档位/右键路由）；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端生成 2 件/陈列/播放路由/重启恢复/缺失提示/日志全链路在新接线后复走通过）
 - [x] B4.3 文档同步 —— x.progress 勾选附记录；z.plan 附录 A001 状态行改 ✅ 已完成；验证：人工审核（✅ 完成：本组勾选 + 附录 A001 状态行更新；B 系列 49 项全部勾选附完成说明）
+
+## C. 第 2 轮审计修复任务清单（依据 z.plan.md 附录 A002，2026-08-15）
+
+- 约定：P 级条目含简单修复方案（`—— 做法`）与可执行验证；修复后跑全量探针回归（AGENTS.md 命令）；版本随本轮审计修复 P+1 → 0.1.0.2
+
+### C0. P0 正确性
+
+> ✅ C0.1-C0.5 全部完成（2026-08-15）：探针 .temp/probe_c0_fixes.py 五项 PASS；全量 19 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] C0.1 档位切换动画冻结修复 —— deck_widget.set_animations_enabled 的 enabled=True 且 _playing 时补 timer.start()（与关闭分支对称）；验证：播放中 False→True 切换后 timer.isActive() 断言（✅ 完成：elif _playing 分支补 timer.start()；探针断言 timer 重启）
+- [x] C0.2 errorOccurred 连接（P1-1 遗留）—— engine._ensure_player 连接 errorOccurred → emit ERROR(playback_error) + 日志；验证：模拟错误信号断言 ERROR 事件（✅ 完成：_on_player_error 回调（NoError 忽略，其余 ERROR(playback_error) + 日志））
+- [x] C0.3 封面残留补修（P1-5 遗留）—— record_widget.set_item 封面加载失败分支补 self._cover = None；验证：local 封面文件删除后换物品断言 _cover 为 None（✅ 完成：set_item 先清空再加载（旧封面残留彻底修复））
+- [x] C0.4 封面失败语义统一（P1-6）—— generator 封面导入失败时降级 item.cover_source="placeholder"（或日志改"生成中止"）；验证：失败场景生成成功且占位图兜底断言（✅ 完成：失败降级 placeholder + 清 cover_path，生成继续）
+- [x] C0.5 白名单覆盖补全（P1-3）—— static_config 白名单扩：字符串键（log_level/music_dir/data_dir/logs_dir）+ 容器键（animation/colors/card_size）类型校验（非法移除+告警）；验证：误写类型后各消费点回退默认断言（✅ 完成：_STRING_*_KEYS/_CONTAINER_UI_KEYS 扩展 + _sanitize_types 三参数化；探针改坏类型断言移除）
+
+### C1. P1 去重
+
+> ✅ C1.1-C1.3 全部完成（2026-08-15）：探针 .temp/probe_c1_dedup.py 三项 PASS；全量 20 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] C1.1 migration 路径单点（P1-8 遗留）—— migration._connect 改走 repository.get_db_path()（消除 schema.DB_PATH 值绑定）；验证：set_db_path_for_tests 后无参 migrate 不碰真实库（✅ 完成：_connect 延迟 import get_db_path（repository↔migration 循环依赖结构性例外，注释说明）；无参 migrate 在测试库建表断言）
+- [x] C1.2 retry 类型边界（P2-4）—— times 校验排除 bool（isinstance bool）；delay 加 (int,float) 类型检查；验证：times=True/delay="0.1" 抛 ValueError（✅ 完成：times 排除 bool + delay (int,float) 排除 bool，统一抛 ValueError）
+- [x] C1.3 settings 路径收敛 + 回调可观测（P2-3）—— USER_CONFIG_PATH 改 project_root() 派生；get_logger 顶部 import；回调异常 warning + 按回调去重；验证：路径一致 + 重复注册只触发一次（✅ 完成：路径收敛 + 顶部 import + 回调异常 warning + 去重）
+
+### C2. P2 配置化
+
+> ✅ C2.1-C2.4 全部完成（2026-08-15）：探针 .temp/probe_c2_config.py 四项 PASS；全量 21 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] C2.1 probe 流式读取（P1-2 遗留）—— decoders 四格式 probe 改 with open() as f: f.read(12)；验证：大文件探测无全量读盘（源码断言 + 行为）（✅ 完成：四格式改流式读取（mp3 3 字节/flac 4/wav 12/m4a 12）+ 行为断言）
+- [x] C2.2 import_dialog 底层兜底（P1-4 遗留）—— _on_ok 加 except Exception → QMessageBox 提示后 return；验证：mock 底层异常不炸出（✅ 完成：except Exception 兜底提示；mock generate 抛 RuntimeError 断言不炸出 + 提示弹出）
+- [x] C2.3 progress_percent 钳制（P2-1）—— 返回值 min(100, ...) + 注释修正；验证：超界输入断言 100（✅ 完成：min(100, ...) 钳制 + 注释含"钳制"）
+- [x] C2.4 回退字面量收敛（P2-7）—— settings/registry 回退 "refined" 统一经 default_level()（或单常量）；验证：三处一致断言（✅ 完成：static_config 新增 DEFAULT_REALISM_LEVEL 单源常量；settings 两处/registry 一处引用）
+
+### C3. P3 清理
+
+> ✅ C3.1-C3.3 全部完成（2026-08-15）：探针 .temp/probe_c3_cleanup.py 三项 PASS；全量 22 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] C3.1 _connect 目录确保（P1-7）—— repository._connect 前 Path(get_db_path()).parent.mkdir(parents=True, exist_ok=True)；验证：music/ 删除后首连不崩（✅ 完成：_connect 加父目录确保；深层不存在路径建库断言）
+- [x] C3.2 event_bus bound method 去重（P2-5）—— 判重改 (event, callback.**self**, callback.**func**) 三元组（或弱引用）；验证：同实例重复订阅只收一次（✅ 完成：_callback_key 判重键（bound method 按 id(self)+id(func)，普通函数/lambda 按 id）；不同 lambda 不误判）
+- [x] C3.3 注释/文案修正（P2-2/P2-6）—— main.py 说明区更新（单例通道）、run_gui 文案改"GUI 依赖缺失"；验证：人工核对（✅ 完成：说明区改单例通道描述；文案改"GUI 依赖缺失（请检查 PySide6 安装）"）
+
+### C4. 验证与收尾
+
+> ✅ C4.1-C4.3 全部完成（2026-08-15）：全量 22 探针 PASS + 冒烟 55 模块 + --version 0.1.0.2；z.plan 附录 A002 状态行已更新；**C 系列（第 2 轮审计修复）17 项全部落地**
+
+- [x] C4.1 全量探针回归 —— 18 探针全量 + 冒烟 + --version 0.1.0.2；验证：全 PASS（✅ 完成：22 探针（A1-A14 + B0-B3 + C0-C3）全部 PASS；冒烟 smoke OK；--version 0.1.0.2）
+- [x] C4.2 端到端复走 —— probe_a14_integration（含档位切换动画场景）；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 C0-C3 修复后复走通过）
+- [x] C4.3 文档同步 —— 勾选附记录；z.plan 附录 A002 状态行改 ✅；base.json version → 0.1.0.2 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A002 状态行更新 + base.json/README 版本 0.1.0.2 + A1/B1 探针断言同步）

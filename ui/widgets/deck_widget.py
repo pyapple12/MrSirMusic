@@ -32,13 +32,15 @@ class DeckWidget(QWidget):
         self.timer.timeout.connect(self._tick)
 
     def set_animations_enabled(self, enabled: bool) -> None:
-        # 动画开关（A13.3 档位联动）：关闭时停定时器 + 唱针瞬时落位；播放中立即生效
+        # 动画开关（A13.3 档位联动/C0.1）：关闭时停定时器 + 唱针瞬时落位；播放中重新启用时重启定时器
         self._animations_enabled = enabled
         if not enabled:
             self.timer.stop()
             if self._playing:
                 self._tonearm_pos = 1.0
                 self.update()
+        elif self._playing:
+            self.timer.start()
 
     @property
     def angle(self) -> float:

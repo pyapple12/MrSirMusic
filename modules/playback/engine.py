@@ -33,13 +33,28 @@ class PlaybackEngine:
         self.state: str = "stopped"
 
     def _ensure_player(self) -> Any:
-        # 延迟创建 QMediaPlayer（offscreen 可无头初始化）；媒体自然结束 → 发 ended 状态事件
+        # 延迟创建 QMediaPlayer（offscreen 可无头初始化）；媒体自然结束 → ended；播放错误 → ERROR
         if self._player is None:
             from PySide6.QtMultimedia import QMediaPlayer
 
             self._player = QMediaPlayer()
             self._player.mediaStatusChanged.connect(self._on_media_status)
+            self._player.errorOccurred.connect(self._on_player_error)
         return self._player
+
+    def _on_player_error(self, error: Any, error_string: str) -> None:
+        # 播放器错误回调（C0.2）：解码失败/格式不支持/IO 错误 → ERROR(playback_error) + 日志
+        from PySide6.QtMultimedia import QMediaPlayer
+
+        if error == QMediaPlayer.Error.NoError:
+            return
+        _logger.warning("播放器错误: %s", error_string)
+        emit(
+            ERROR,
+            ErrorPayload(
+                category="playback_error", message=f"播放错误：{error_string}"
+            ),
+        )
 
     def _on_media_status(self, status: Any) -> None:
         # 媒体状态回调：自然结束（EndOfMedia）→ 发 PLAYBACK_STATE(ended)（由 progress 决定 next/stop）

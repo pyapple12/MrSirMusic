@@ -13,13 +13,13 @@ def get_version() -> str:
 
 
 def run_gui() -> None:
-    # 启动 GUI：PySide6 与 ui.main_window 延迟导入（--version 路径零 GUI 开销；ui 未完成时友好提示退出）
+    # 启动 GUI：PySide6 与 ui.main_window 延迟导入（--version 路径零 GUI 开销；依赖缺失时友好提示退出）
     try:
         from PySide6.QtWidgets import QApplication
         from ui.main_window import MainWindow
         from ui.themes import apply_theme
     except ImportError as exc:
-        print(f"GUI 依赖未就绪：{exc}（ui 层尚未开发完成）", file=sys.stderr)
+        print(f"GUI 依赖缺失：{exc}（请检查 PySide6 安装）", file=sys.stderr)
         raise SystemExit(1)
     app = QApplication([])
     apply_theme(app)
@@ -41,15 +41,14 @@ if __name__ == "__main__":
 
 
 # ===== main.py 函数/常量说明 =====
-# _STATIC_DIR: 静态配置目录（唯一路径来源），__file__ 自定位，读取 base.json 用
 # get_version() -> str: 读取 base.json version 字段（版本唯一来源）
-#   逻辑：json 读取 → 取 version 字段 → 转 str；键缺失返回 "unknown"
-#   异常：任何读取/解析错误捕获后返回 "unknown"（--version 容错，不崩溃）
+#   逻辑：经 static_config 单例单通道读取 → isinstance(str) 校验；键缺失/非字符串返回 "unknown"
+#   异常：配置缺失/损坏由 static_config 容错为空 dict，此处回退 "unknown"（--version 容错，不崩溃）
 #   关联配置：config/static/base.json 的 version 字段（四段式 X.Y.Z.P）
 # run_gui() -> None: GUI 启动
-#   逻辑：延迟 import PySide6 与 ui.main_window → QApplication + MainWindow → 事件循环
-#   异常：ImportError（ui 层未完成或依赖缺失）→ stderr 提示 + SystemExit(1)，不崩溃
-#   设计理由：PySide6 重依赖延迟导入，--version 路径不加载 GUI；ui 未完成阶段可独立验证 CLI
+#   逻辑：延迟 import PySide6 与 ui.main_window → apply_theme → QApplication + MainWindow → 事件循环
+#   异常：ImportError（PySide6 缺失等）→ stderr 提示 + SystemExit(1)，不崩溃
+#   设计理由：PySide6 重依赖延迟导入，--version 路径不加载 GUI；主题在窗口创建前应用（B0.5）
 # main() -> None: 入口分发
 #   逻辑：argparse 解析（--version/-V 用 action="version" 自动打印并 SystemExit(0)）→ run_gui()
 #   关联配置：config/static/base.json（版本号经 get_version 间接引用）

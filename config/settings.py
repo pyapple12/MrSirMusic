@@ -1,24 +1,27 @@
-# 用户配置模块（A1.7/B2.6）：AppConfig dataclass + config/user_config.json 读写，缺省回退，坏 JSON 不崩溃，变更回调
+# 用户配置模块（A1.7/B2.6/C1.3）：AppConfig dataclass + config/user_config.json 读写，缺省回退，坏 JSON 不崩溃，变更回调
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from config.static.static_config import get_static_config
+from config.static.static_config import DEFAULT_REALISM_LEVEL, get_static_config
+from utils.logger import get_logger
+from utils.paths import project_root
 
-# 用户配置文件路径（项目内，随项目模式；已 gitignore）
-USER_CONFIG_PATH = (
-    Path(__file__).resolve().parent.parent / "config" / "user_config.json"
-)
+# 模块日志（保存失败/回调异常告警用，C1.3 顶部导入）
+_logger = get_logger("settings")
+
+# 用户配置文件路径（项目内，随项目模式；已 gitignore；C1.3 收敛 project_root 单点）
+USER_CONFIG_PATH = project_root() / "config" / "user_config.json"
 
 
 @dataclass
 class AppConfig:
-    # 用户可调配置聚合：拟真度档位（默认读 effects.json 单源，B2.6）+ 自动翻面
+    # 用户可调配置聚合：拟真度档位（默认读 effects.json 单源，回退常量 C2.4）+ 自动翻面
     realism_level: str = field(
         default_factory=lambda: str(
-            get_static_config().effects.get("default_level", "refined")
+            get_static_config().effects.get("default_level", DEFAULT_REALISM_LEVEL)
         )
     )
     auto_flip: bool = False
@@ -67,7 +70,9 @@ def save_config(cfg: AppConfig) -> None:
     level = (
         cfg.realism_level
         if cfg.realism_level in _VALID_LEVELS
-        else str(get_static_config().effects.get("default_level", "refined"))
+        else str(
+            get_static_config().effects.get("default_level", DEFAULT_REALISM_LEVEL)
+        )
     )
     try:
         USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -80,21 +85,20 @@ def save_config(cfg: AppConfig) -> None:
             encoding="utf-8",
         )
     except Exception:
-        from utils.logger import get_logger
-
-        get_logger("settings").warning("用户配置保存失败: %s", USER_CONFIG_PATH)
+        _logger.warning("用户配置保存失败: %s", USER_CONFIG_PATH)
         return
     _config_cache = None
     for cb in _changed_listeners:
         try:
             cb(cfg)
-        except Exception:
-            pass
+        except Exception as exc:
+            _logger.warning("配置变更回调异常（已隔离）: %s", exc)
 
 
 def add_change_listener(callback: Callable[[AppConfig], None]) -> None:
-    # 注册变更回调（保存配置后触发，参数为新 AppConfig）
-    _changed_listeners.append(callback)
+    # 注册变更回调（保存配置后触发；C1.3 同一回调去重）
+    if callback not in _changed_listeners:
+        _changed_listeners.append(callback)
 
 
 # ===== config/settings.py 函数/常量说明 =====

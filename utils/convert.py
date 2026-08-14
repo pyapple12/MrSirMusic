@@ -16,10 +16,10 @@ def seconds_from_ms(ms: int | float) -> float:
 
 
 def progress_percent(position_ms: int, duration_ms: int) -> int:
-    # 进度百分比换算（0-100；总时长 0/非正返回 0）：进度显示唯一实现（B1.4 去重）
+    # 进度百分比换算（钳制 0-100，C2.3；总时长 0/非正返回 0）：进度显示唯一实现（B1.4 去重）
     if duration_ms <= 0:
         return 0
-    return int(position_ms * 100 / duration_ms)
+    return min(100, int(position_ms * 100 / duration_ms))
 
 
 def to_float32(audio: Any) -> Any:

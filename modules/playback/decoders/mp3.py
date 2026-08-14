@@ -7,9 +7,10 @@ EXTENSIONS = (".mp3",)
 
 
 def probe(path: Path) -> bool:
-    # 文件头验证：ID3 标签头或 MPEG 音频帧同步（0xFFEx）
+    # 文件头验证：ID3 标签头或 MPEG 音频帧同步（0xFFEx）；流式读取前 3 字节（C2.1 不整文件读盘）
     try:
-        head = path.read_bytes()[:3]
+        with open(path, "rb") as f:
+            head = f.read(3)
         return head.startswith(b"ID3") or (
             len(head) >= 2 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0
         )

@@ -147,6 +147,10 @@ class ImportDialog(QDialog):
         except GenerateError as exc:
             QMessageBox.warning(self, "生成物品", str(exc))
             return
+        except Exception as exc:
+            # C2.2：底层异常（磁盘/库损坏等）兜底提示，不炸出 Qt 槽
+            QMessageBox.warning(self, "生成物品", f"生成失败：{exc}")
+            return
         self.accept()
 
     def result_item(self) -> Item | None:

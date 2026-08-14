@@ -12,7 +12,7 @@ STATIC_DIR = Path(__file__).resolve().parent
 # 模块级日志（utils.logger 依赖本模块，故此处用标准库；告警不打断加载）
 _logger = logging.getLogger(__name__)
 
-# 数值键白名单（B2.4：加载后逐键校验类型，非数值 → 移除键 + 告警，消费点回退默认）
+# 数值键白名单（B2.4/C0.5：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认）
 _NUMERIC_BASE_KEYS = ("sample_rate", "channels")
 _NUMERIC_UI_KEYS = (
     "window_width",
@@ -23,6 +23,23 @@ _NUMERIC_UI_KEYS = (
     "spin_tick_ms",
     "progress_interval_ms",
 )
+
+# 字符串键白名单（C0.5：log_level/music_dir 等非字符串会导致导入即崩）
+_STRING_BASE_KEYS = (
+    "version",
+    "app_name",
+    "music_dir",
+    "data_dir",
+    "logs_dir",
+    "log_level",
+)
+_STRING_UI_KEYS = ("font_family", "cover_image_filter")
+
+# 容器键白名单（C0.5：animation/colors/card_size 非 dict/list 会致消费点解包崩）
+_CONTAINER_UI_KEYS = ("animation", "colors", "card_size")
+
+# 拟真度默认档位回退字面量（C2.4 单源：effects.json 缺 default_level 时的统一回退值）
+DEFAULT_REALISM_LEVEL = "refined"
 
 
 @dataclass
@@ -47,9 +64,12 @@ def _read_json(rel_path: str) -> dict[str, Any]:
 
 
 def _sanitize_types(
-    data: dict[str, Any], numeric_keys: tuple[str, ...]
+    data: dict[str, Any],
+    numeric_keys: tuple[str, ...] = (),
+    string_keys: tuple[str, ...] = (),
+    container_keys: tuple[str, ...] = (),
 ) -> dict[str, Any]:
-    # B2.4 类型校验：白名单数值键非 int/float → 移除键 + 告警（消费点回退默认，不崩溃）
+    # B2.4/C0.5 类型校验：白名单数值/字符串/容器键类型非法 → 移除键 + 告警（消费点回退默认，不崩溃）
     result = dict(data)
     for key in numeric_keys:
         value = result.get(key)
@@ -60,6 +80,20 @@ def _sanitize_types(
         ):
             _logger.warning(
                 "静态配置数值键类型非法（已移除，回退默认）: %s = %r", key, value
+            )
+            result.pop(key, None)
+    for key in string_keys:
+        value = result.get(key)
+        if value is not None and not isinstance(value, str):
+            _logger.warning(
+                "静态配置字符串键类型非法（已移除，回退默认）: %s = %r", key, value
+            )
+            result.pop(key, None)
+    for key in container_keys:
+        value = result.get(key)
+        if value is not None and not isinstance(value, (dict, list)):
+            _logger.warning(
+                "静态配置容器键类型非法（已移除，回退默认）: %s = %r", key, value
             )
             result.pop(key, None)
     return result
@@ -74,9 +108,16 @@ def _load_static_config() -> StaticConfig:
         if isinstance(rel_path, str):
             data = _read_json(rel_path)
             if key == "base":
-                data = _sanitize_types(data, _NUMERIC_BASE_KEYS)
+                data = _sanitize_types(
+                    data, numeric_keys=_NUMERIC_BASE_KEYS, string_keys=_STRING_BASE_KEYS
+                )
             elif key == "ui":
-                data = _sanitize_types(data, _NUMERIC_UI_KEYS)
+                data = _sanitize_types(
+                    data,
+                    numeric_keys=_NUMERIC_UI_KEYS,
+                    string_keys=_STRING_UI_KEYS,
+                    container_keys=_CONTAINER_UI_KEYS,
+                )
             setattr(result, key, data)
         else:
             _logger.warning("静态配置映射缺少分类: %s", key)
@@ -97,12 +138,14 @@ def get_static_config() -> StaticConfig:
 # ===== config/static/static_config.py 函数/常量说明 =====
 # STATIC_DIR: 静态配置目录（__file__ 自定位；本层不依赖 utils，避免 utils/logger → config 循环，B2.2）
 # _NUMERIC_BASE_KEYS / _NUMERIC_UI_KEYS: 数值键白名单（B2.4 类型校验）
+# _STRING_BASE_KEYS / _STRING_UI_KEYS: 字符串键白名单（C0.5：log_level/music_dir 等非字符串导入即崩）
+# _CONTAINER_UI_KEYS: 容器键白名单（C0.5：animation/colors/card_size 非 dict/list 致消费点解包崩）
 # StaticConfig(dataclass): 静态配置聚合（base/item_types/effects/ui 四个 dict 字段，只读）
 # _read_json(rel_path) -> dict: 读单文件
 #   逻辑：json 加载 → 非 dict 或解析失败返回空 dict
 #   异常：一切异常捕获后告警返回空（不崩溃；与 AGENTS.md 宽容解析策略一致）
-# _sanitize_types(data, numeric_keys) -> dict: B2.4 类型校验
-#   逻辑：白名单数值键非 int/float → 移除键 + 告警（消费点回退默认，不崩溃）
+# _sanitize_types(data, numeric_keys, string_keys, container_keys) -> dict: B2.4/C0.5 类型校验
+#   逻辑：三类白名单键类型非法（非 int/float、非 str、非 dict/list）→ 移除键 + 告警
 # _load_static_config() -> StaticConfig: 私有加载
 #   逻辑：读 config.json 映射表 → 按四分类键遍历加载 → base/ui 类型校验 → 聚合
 #   设计理由：映射表驱动（config.json 是唯一引导），键集合为契约层显式声明

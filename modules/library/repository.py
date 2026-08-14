@@ -35,14 +35,16 @@ def get_db_path() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    # 打开物品库连接：外键开启 + Row 工厂 + 迁移确保 schema（按路径缓存，B3.6）
+    # 打开物品库连接：父目录确保（C3.1：music/ 缺失/深层路径自动创建）→ 外键开启 + Row 工厂 + 迁移（按路径缓存）
     global _migrated_path
-    conn = sqlite3.connect(get_db_path())
+    db_path = get_db_path()
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    if _migrated_path != get_db_path():
+    if _migrated_path != db_path:
         migrate(conn)
-        _migrated_path = get_db_path()
+        _migrated_path = db_path
     return conn
 
 

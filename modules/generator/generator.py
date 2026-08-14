@@ -50,7 +50,10 @@ def generate(
     item.cover_source = cover_source
     if cover_source == "local" and cover_file:
         if import_cover_file(cover_file, item) is None:
+            # C0.4：封面导入失败降级占位图（与"缓存兜底"策略一致，不中止生成）
             _logger.warning("封面导入失败（降级占位图）: %s", cover_file)
+            item.cover_source = "placeholder"
+            item.cover_path = ""
     problems = check_item(item)
     if problems:
         detail = "；".join(problems)

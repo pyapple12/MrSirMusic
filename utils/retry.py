@@ -15,11 +15,11 @@ def retry(
     exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     # 重试装饰器工厂：指数退避（第 n 次重试前等待 delay * 2^n），捕获指定异常，耗尽后重抛
-    # 参数校验（B3.3）：times >= 1、delay >= 0、exceptions 非空，否则抛 ValueError
-    if not isinstance(times, int) or times < 1:
+    # 参数校验（B3.3/C1.2）：times 为 >=1 的整数（排除 bool）、delay 为 >=0 的数字（排除 bool）、exceptions 非空
+    if isinstance(times, bool) or not isinstance(times, int) or times < 1:
         raise ValueError("times 必须为 >= 1 的整数")
-    if delay < 0:
-        raise ValueError("delay 必须 >= 0")
+    if isinstance(delay, bool) or not isinstance(delay, (int, float)) or delay < 0:
+        raise ValueError("delay 必须为 >= 0 的数字")
     if not exceptions:
         raise ValueError("exceptions 不能为空")
 

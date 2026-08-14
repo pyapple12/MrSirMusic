@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from config.static.static_config import get_static_config
+from config.static.static_config import DEFAULT_REALISM_LEVEL, get_static_config
 from ui.effects.wear import Effect, WearEffect, WeatheringEffect
 
 # 静态配置一次解包
@@ -16,8 +16,8 @@ def available_levels() -> list[str]:
 
 
 def default_level() -> str:
-    # 默认档位（effects.json default_level；缺失回退 refined）
-    return str(_SC.effects.get("default_level", "refined"))
+    # 默认档位（effects.json default_level；缺失回退单源常量，C2.4）
+    return str(_SC.effects.get("default_level", DEFAULT_REALISM_LEVEL))
 
 
 def animations_enabled(level: str) -> bool:

@@ -318,3 +318,80 @@ Track: path / title / artist / album / duration(秒) / format
 - 容错降级链路完整：empty_record / placeholder 兜底 / 宽容解析 / 探针隔离测试库
 - TDD 全覆盖：14 个探针全量回归
 - 三路交叉验证一致：mutagen 帧 str() 行为已实测排除；read_bytes 全读语义已实测确认
+
+## 附录 A002：全量代码审计报告（第2轮，2026-08-15）
+
+> 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json
+> 方式：三路并行（utils+config / modules / ui）逐文件全文阅读 + git show 0485b8a 修复 diff 核对 + 实测验证
+> 状态：✅ 已完成（C 系列修复 2026-08-15 全部落地：C0-C4 共 17 项；全量回归 22 探针 PASS + 冒烟 OK + --version 0.1.0.2）
+> 结论：P0 1 项、P1 8 项、P2 7 项 + 观察项 16 条；**B 系列归档缺口：P1-8/P1-9 无对应条目、P1-7 修复不完整**
+
+## 零、上轮修复复核清单（A001 / B 系列 49 项）
+
+| 复核项                                                                                                       | 现状                                                                                                   | 证据                           |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| 关键修复 11 项抽查（缺失检查/DB_PATH 单点/档位接线/主题/右键路由/控件接入/paths/类型校验/总线/缓存/**del**） | ✅ 仍在                                                                                                | 各组逐行核对（commit 0485b8a） |
+| B 系列覆盖完整性                                                                                             | ⚠️ 缺口 3 项：P1-7（封面残留修复不完整）、P1-8（errorOccurred）与 P1-9（import_dialog 兜底）无对应条目 | B0-B4 清单 vs A001 条目比对    |
+| migration DB_PATH 值绑定（P1-1）                                                                             | ⚠️ 未完全收敛（migration.py:6,20-21 仍绑定 schema.DB_PATH）                                            | modules 组                     |
+| event_bus 去重（B3.8）                                                                                       | ⚠️ 部分（对 bound method 无效）                                                                        | modules 组                     |
+| main.py 说明区 / settings 路径派生 / effects 回退字面量                                                      | ⚠️ 漏改（B1.1/B1.2/P2-8 残留）                                                                         | config 组                      |
+| 引入回归                                                                                                     | ❌ 0 处（但 B0.4 接线暴露新缺陷 P0-1）                                                                 | 各组                           |
+
+## 一、P0-P3 修复清单
+
+### P0（高：确定性错值 + 真实可达）
+
+| #    | 文件:行号                       | 类型     | 描述                                                                                                     | 建议                                        | 性质                  | 影响面 |
+| ---- | ------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------- | --------------------- | ------ |
+| P0-1 | ui/widgets/deck_widget.py:34-41 | 1 正确性 | set_animations_enabled(True) 只更新标志不重启 timer——播放中改档位"简洁→精细"后转盘永久冻结（确定性复现） | enabled=True 且 _playing 时补 timer.start() | 新增（B0.4 接线引入） | 显示层 |
+
+### P1（中）
+
+| #    | 文件:行号                                            | 类型        | 描述                                                                                                                                              | 建议                                               | 性质                |
+| ---- | ---------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ------------------- |
+| P1-1 | engine.py:35-44                                      | 2 防御      | QMediaPlayer.errorOccurred 仍未连接——损坏/不支持格式播放静默（A001 P1-8 遗留）                                                                    | 连接 → emit ERROR(playback_error) + 日志           | 遗留                |
+| P1-2 | decoders/mp3.py:12、flac.py:12、wav.py:12、m4a.py:12 | 9 性能      | 四格式 probe 仍整文件 read_bytes（A001 P1-11 遗留）                                                                                               | with open() as f: f.read(12)                       | 遗留                |
+| P1-3 | config/static/static_config.py:15-25 + 消费点        | 2 防御      | B2.4 白名单覆盖不完整（实测）：log_level 非法值 → setLevel ValueError 导入即崩；music_dir/data_dir 非字符串 → schema.py import 即崩；容器键不校验 | 白名单扩到字符串/容器键（移除+告警）               | 新增（B2.4 不完整） |
+| P1-4 | ui/import_dialog.py:138-149                          | 2 防御      | generate 底层异常无兜底——槽内炸出（A001 P1-9 遗留）                                                                                               | except Exception → QMessageBox 提示                | 遗留                |
+| P1-5 | ui/widgets/record_widget.py:41-49                    | 1 正确性    | set_item 封面加载失败不清 _cover——local 封面文件被删后旧封面残留（A001 P1-7 不完整）                                                              | 失败分支补 self._cover = None                      | 遗留                |
+| P1-6 | modules/generator/generator.py:51-58                 | 13 错误策略 | 封面导入失败日志称"降级占位图"实际中止生成（语义矛盾，B0.2 引入）                                                                                 | 失败降级 cover_source="placeholder" 或日志改"中止" | 新增                |
+| P1-7 | modules/library/repository.py:37-41                  | 2 防御      | _connect 不 ensure_dir——music/ 被删后首连崩溃                                                                                                     | 连接前 mkdir(parents=True, exist_ok=True)          | 新增                |
+| P1-8 | modules/library/migration.py:6,20-21                 | 12 配置卫生 | _connect 值绑定 schema.DB_PATH——无参 migrate() 绕过测试库覆盖（潜伏）                                                                             | 改走 repository.get_db_path()                      | 遗留（P1-1 未收敛） |
+
+### P2（低）
+
+| #    | 文件:行号                                           | 类型   | 描述                                                                                    |
+| ---- | --------------------------------------------------- | ------ | --------------------------------------------------------------------------------------- |
+| P2-1 | utils/convert.py:22                                 | 2+6    | progress_percent 不钳制（position>duration → >100，实测）且注释失实                     |
+| P2-2 | main.py:44-47                                       | 6      | 说明区失实（_STATIC_DIR 已删，B1.1 漏改）                                               |
+| P2-3 | config/settings.py:11-13,83,88-92                   | 4+6+10 | USER_CONFIG_PATH 未收敛 project_root；函数内延迟 import get_logger；回调异常静默/无去重 |
+| P2-4 | utils/retry.py:19,21                                | 2      | times=True 通过校验（bool 是 int 子类，实测）；delay="0.1" 抛 TypeError                 |
+| P2-5 | modules/playback/event_bus.py:14-19                 | 1/2    | 去重对 bound method 无效（注释"幂等安全"失实）                                          |
+| P2-6 | main.py:22                                          | 6      | 文案"ui 层尚未开发完成"过时                                                             |
+| P2-7 | effects.json:2 + settings.py:21,70 + registry.py:20 | 12     | 回退字面量 "refined" 三处残留（主值已单源）                                             |
+
+## 二、参考级观察项（记录不修）
+
+| 位置                                                        | 描述                                                       | 回落理由                           |
+| ----------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
+| ui/main_window.py:71 + settings 监听器                      | 档位监听器模块级累积无退订（多窗口残留）                   | 当前 GUI 单实例，正常路径不可达    |
+| engine.py:161-172                                           | flip() B 面首缺失时队列已推进与返回值不一致                | 可自愈；UI 不消费返回值            |
+| queue.py:14-15                                              | flipped 从 B 回 A 不复位                                   | side 推导已兜底                    |
+| engine.py:66-76                                             | 空物品 load_item 不 setSource（旧媒体续播）                | 空物品被 check_item 拦截不可达     |
+| main_window.py:50-51                                        | reporter 常驻 1s 定时器（未播放也发 PROGRESS）             | 事件量 1/s 可忽略                  |
+| regenerate.py:13 / capacity.py:16-19 / generate_check.py:18 | 硬编码策略字符串/超载信息失真/重复计算                     | 有注释依据/DB 篡改才可达/微优化    |
+| delete.py:37-38                                             | unlink 失败静默                                            | 保守策略正确                       |
+| providers.py:11-15                                          | COVERS_DIR 独立派生项目根（第 4 处）                       | 结果一致，模块解耦可接受           |
+| file_utils vs registry vs reader                            | 三处格式清单（B2.3 半单源）                                | utils 零业务依赖分层约束，告警兜底 |
+| repository.py:43-45                                         | _migrated_path 单槽（同路径删库重建不重迁移）              | 探针惯例新路径，生产无此场景       |
+| deck_view.py:57,83 / 97-103 / 128                           | CD 翻面按钮态漂移 / 空物品文案覆盖 / QInputDialog 探针挂起 | 显示态偏差/探针未触发              |
+| main_window.py:196-200                                      | closeEvent 未停 deck_widget timer/engine                   | QTimer 父销毁自动停，关窗即退进程  |
+| themes.py:26-43                                             | QProgressBar 无 QSS 规则                                   | 外观缺省，豁免范围                 |
+| main_window.py:76                                           | 菜单注释残留"视图"                                         | 纯注释                             |
+| main_window.py:121-151                                      | _edit_item 等三处函数内延迟 import（非重依赖）             | 轻微规范偏差                       |
+
+## 三、亮点
+
+- B 系列 46/49 项完整在位，回归 0 处；模块层零 PySide6 顶层导入，分层合规
+- 重点核查结论：settings 缓存/失效一致性、migrate 路径缓存、progress 时长兜底、delete 路径消毒均实现正确
+- 探针体系稳定：18 探针全量回归支撑审计前状态验证

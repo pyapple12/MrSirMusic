@@ -1,6 +1,7 @@
-# 迁移模块（A6.3）：schema_version 读取 + 迁移函数注册表，逐级升级到最新版本
+# 迁移模块（A6.3/C1.1）：schema_version 读取 + 迁移函数注册表，逐级升级到最新版本
 
 import sqlite3
+from pathlib import Path
 from typing import Callable
 
 from modules.library.schema import DB_PATH, SCHEMA_VERSION, create_schema
@@ -16,9 +17,13 @@ MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {1: _migrate_v1}
 
 
 def _connect() -> sqlite3.Connection:
-    # 建迁移专用连接（库不存在时先确保父目录）
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    return sqlite3.connect(DB_PATH)
+    # 建迁移专用连接（C1.1：路径经 repository.get_db_path 单点，测试库覆盖生效；
+    # 延迟 import 规避 repository ↔ migration 循环依赖——结构性例外）
+    from modules.library.repository import get_db_path
+
+    db_path = Path(get_db_path())
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(str(db_path))
 
 
 def get_schema_version(conn: sqlite3.Connection) -> int:
