@@ -31,6 +31,8 @@ class PlaybackEngine:
         self._queue: PlaybackQueue | None = None
         self._track: Track | None = None
         self.state: str = "stopped"
+        # 刚翻面标记（D0.4：SIDE_FLIPPED 仅在翻面瞬间发射一次，B 面内切换不发）
+        self._just_flipped = False
 
     def _ensure_player(self) -> Any:
         # 延迟创建 QMediaPlayer（offscreen 可无头初始化）；媒体自然结束 → ended；播放错误 → ERROR
@@ -43,7 +45,7 @@ class PlaybackEngine:
         return self._player
 
     def _on_player_error(self, error: Any, error_string: str) -> None:
-        # 播放器错误回调（C0.2）：解码失败/格式不支持/IO 错误 → ERROR(playback_error) + 日志
+        # 播放器错误回调（C0.2/D0.5）：解码失败/格式不支持/IO 错误 → ERROR(playback_error) + 状态同步 stopped
         from PySide6.QtMultimedia import QMediaPlayer
 
         if error == QMediaPlayer.Error.NoError:
@@ -55,6 +57,8 @@ class PlaybackEngine:
                 category="playback_error", message=f"播放错误：{error_string}"
             ),
         )
+        if self.state != "stopped":
+            self._emit_state("stopped")
 
     def _on_media_status(self, status: Any) -> None:
         # 媒体状态回调：自然结束（EndOfMedia）→ 发 PLAYBACK_STATE(ended)（由 progress 决定 next/stop）
@@ -70,19 +74,21 @@ class PlaybackEngine:
         emit(PLAYBACK_STATE, PlaybackStatePayload(state=state))
 
     def _emit_track(self) -> None:
-        # 发曲目切换事件（当前曲目 + 所在面；翻面时附带 SIDE_FLIPPED）
+        # 发曲目切换事件（当前曲目 + 所在面；翻面瞬间附带一次 SIDE_FLIPPED，D0.4）
         side = None
         if self._queue is not None:
             side = "B" if self._queue.index >= self._queue.boundary else "A"
         emit(TRACK_CHANGED, TrackChangedPayload(track=self._track, side=side))
-        if self._queue is not None and self._queue.flipped and side == "B":
+        if self._just_flipped and side == "B":
             emit(SIDE_FLIPPED, SideFlippedPayload(side="B"))
+            self._just_flipped = False
 
     def load_item(self, item: Item) -> None:
         # 载入物品：建面内播放序列（auto_flip 读用户配置）→ 载第一首（不自动播放）
         from PySide6.QtCore import QUrl
 
         self._queue = build_queue(item, auto_flip=load_config().auto_flip)
+        self._just_flipped = False
         player = self._ensure_player()
         first = self._queue.current_track()
         self._track = first
@@ -165,6 +171,9 @@ class PlaybackEngine:
         # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False
         if self._queue is None or not self._queue.next():
             return False
+        # D0.4：进入 B 面第一首（刚翻面）时置标记，SIDE_FLIPPED 仅发一次
+        if self._queue.flipped and self._queue.index == self._queue.boundary:
+            self._just_flipped = True
         return self._play_current("切至下一首")
 
     def play_prev(self) -> bool:
@@ -181,6 +190,7 @@ class PlaybackEngine:
             return False
         self._queue.index = self._queue.boundary
         self._queue.flipped = True
+        self._just_flipped = True
         if not self._play_current("手动翻面 → B 面"):
             return False
         _logger.info("手动翻面 → B 面")

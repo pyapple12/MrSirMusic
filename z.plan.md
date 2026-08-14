@@ -395,3 +395,60 @@ Track: path / title / artist / album / duration(秒) / format
 - B 系列 46/49 项完整在位，回归 0 处；模块层零 PySide6 顶层导入，分层合规
 - 重点核查结论：settings 缓存/失效一致性、migrate 路径缓存、progress 时长兜底、delete 路径消毒均实现正确
 - 探针体系稳定：18 探针全量回归支撑审计前状态验证
+
+## 附录 A003：全量代码审计报告（第3轮，2026-08-15）
+
+> 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json
+> 方式：三路并行（utils+config / modules / ui）逐文件全文阅读 + git show c8844d2 修复 diff 核对 + 实测验证
+> 状态：✅ 已完成（D 系列修复 2026-08-15 全部落地：D0-D4 共 12 项；全量回归 24 探针 PASS + 冒烟 OK + --version 0.1.0.3）
+> 结论：P2 7 项（无 P0/P1）；其中 4 项为 C 系列"修复不完整"（C0.5 覆盖面/值域、C2.3 下界、C1.1 残留）、3 项新增；问题密度收敛（45→16→7）
+
+## 零、上轮修复复核清单（A002 / C 系列 17 项）
+
+| 复核项             | 现状                                                                                                   | 证据                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| C 系列 17 项在位性 | ✅ 全部在位（commit c8844d2）                                                                          | 主会话 grep 15 项 + 各组补查             |
+| 引入回归           | ❌ 0 处                                                                                                | 各组实测 import 冒烟 + --version 0.1.0.2 |
+| C0.5 白名单覆盖面  | ⚠️ 不完整（effects/item_types 无校验、容器键 dict/list 混收、容器内部值无白名单、drag_threshold 漏项） | config/ui 组实测                         |
+| C2.3 percent 钳制  | ⚠️ 只修上界（下界 -50 实测）                                                                           | config 组实测                            |
+| C0.5 log_level     | ⚠️ 类型堵了值域残留（小写级别 → setLevel 崩）                                                          | config 组实测                            |
+| C1.1 migration     | ⚠️ DB_PATH 死 import 残留                                                                              | modules 组                               |
+
+## 一、P0-P3 修复清单
+
+### P2（低-中，全部需配置误写或特定场景触发）
+
+| #    | 文件:行号                                                                                                 | 类型   | 描述                                                                                                                                                                                                                                                                          | 建议                                                                              | 性质                |
+| ---- | --------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------- |
+| P2-1 | static_config.py:106-121 + settings.py:34 + deck_widget.py:26-28 / themes.py:14-16 / shelf_view.py:99-100 | 2 防御 | C0.5 校验覆盖面缺口（3 暴露面合并）：effects/item_types 分类未应用校验（effects.levels 非 dict → settings 导入即崩，实测）；容器键 dict/list 混收（animation/colors 应为 dict、card_size 应为 list）；容器内部数值键（record_spin_ms/tonearm_drop_ms/card_size 元素）无白名单 | _sanitize_types 扩展 effects/item_types；容器键按类型区分；容器内部数值键递归校验 | 新增（C0.5 不完整） |
+| P2-2 | settings.py:13 + logger setLevel 消费                                                                     | 2 防御 | log_level 值域未校验：小写/非法级别名穿透白名单 → setLevel ValueError 导入即崩（实测）；json null 也穿过                                                                                                                                                                      | 值域用 logging._nameToLevel 键集合校验；null 移除                                 | 新增（C0.5 不完整） |
+| P2-3 | utils/convert.py:18-22                                                                                    | 2+6    | progress_percent 下界未钳：position 负值返回负百分比（实测 -50），注释"钳制 0-100"失实                                                                                                                                                                                        | 补 max(0, ...) 下界 + 注释/说明区同步                                             | 新增（C2.3 不完整） |
+| P2-4 | engine.py:78-79 + queue.py:29                                                                             | 1+13   | SIDE_FLIPPED 在 B 面内每切一首都重复发射（flipped 置位后不复位）——事件契约污染（当前消费端 _on_side 幂等，未来翻面动画会重复触发）                                                                                                                                            | 翻面仅发射一次（发射后对 flipped 置位动作去重）                                   | 新增                |
+| P2-5 | engine.py:45-57                                                                                           | 13+1   | ERROR 后 engine.state 不同步（C0.2 引入）：播放器失败但 state 停留 "playing"，状态栏漂移且 ended 联动链不触发（有提示可自愈）                                                                                                                                                 | _on_player_error 非 NoError 时同步 _emit_state("stopped")                         | 新增（C0.2 引入）   |
+| P2-6 | migration.py:7                                                                                            | 12+6   | DB_PATH 死 import 残留（C1.1 改走 get_db_path 后正文零使用）                                                                                                                                                                                                                  | 从 import 移除 DB_PATH                                                            | 新增（C1.1 残留）   |
+| P2-7 | utils/logger.py:46                                                                                        | 6      | 说明区"可调参数后续可外置 base.json"失实（logs_dir/log_level 已于 B2.2 外置）                                                                                                                                                                                                 | 说明区更新                                                                        | 新增（B 系列残留）  |
+
+## 二、参考级观察项（记录不修）
+
+| 位置                                   | 描述                                         | 回落理由                         |
+| -------------------------------------- | -------------------------------------------- | -------------------------------- |
+| settings.py:98-101 / main_window.py:71 | 档位监听器跨实例累积无退订                   | GUI 单实例，正常路径不可达       |
+| settings.py:91-95                      | save_config 回调内重入 → 无限递归            | 回调契约为"应用不保存"，理论缺口 |
+| repository.py:45-47                    | migrate 异常时连接泄漏                       | 开发期缺陷 + GC 回收             |
+| side_allocator.py + generator.py       | 分配丢弃曲目无提示                           | 注释声明 + 边界罕见              |
+| delete.py:31                           | 函数内延迟 import COVERS_DIR                 | 轻微规范偏差                     |
+| local_provider.py:18-20                | 非原子写/扩展名不校验（A001 P2-13 归档遗漏） | 失败场景罕见 + UI 兜底           |
+| mp3.py:14                              | 纯 ID3 无帧文件 probe 误判                   | 占位消费 + Qt errorOccurred 兜底 |
+| repository.py:41                       | mkdir 每次调用                               | μs 级开销可忽略                  |
+| settings.py:34                         | effects.levels null 值穿过校验               | 需手动写 null 才触发             |
+| file_utils vs decoders vs reader       | 三处格式清单                                 | utils 零业务依赖分层约束         |
+| static_config.py:127-135               | 单例懒加载非线程安全                         | 模块导入期单线程                 |
+| deck_view.py:57,83 / 97-103            | CD 翻面按钮态漂移 / 空物品文案覆盖           | 显示态偏差                       |
+| main_window.py:76                      | 菜单注释残留"视图"                           | 纯注释                           |
+| themes.py:26-43                        | QProgressBar 无 QSS 规则                     | 外观缺省豁免                     |
+
+## 三、亮点
+
+- C 系列 17 项全部在位且零回归；三组交叉验证一致
+- C0.1 动画时序穷举（播放/暂停 × 动画开关 × 切换顺序）无冻结无泄漏
+- 版本/README/commit 三方一致（0.1.0.2，c8844d2）

@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
-from modules.library.schema import DB_PATH, SCHEMA_VERSION, create_schema
+from modules.library.schema import SCHEMA_VERSION, create_schema
 
 
 def _migrate_v1(conn: sqlite3.Connection) -> None:

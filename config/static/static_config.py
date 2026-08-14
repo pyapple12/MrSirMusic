@@ -1,4 +1,4 @@
-# 应用静态配置加载模块（A1.1/B2.2/B2.4）：config/static/ 只读 json 驱动，模块级缓存单例，坏 JSON 容错降级
+# 应用静态配置加载模块（A1.1/B2.2/B2.4/D0.1）：config/static/ 只读 json 驱动，模块级缓存单例，坏 JSON 容错降级
 
 import json
 import logging
@@ -11,6 +11,9 @@ STATIC_DIR = Path(__file__).resolve().parent
 
 # 模块级日志（utils.logger 依赖本模块，故此处用标准库；告警不打断加载）
 _logger = logging.getLogger(__name__)
+
+# 合法日志级别值域（D0.2：log_level 值域校验，小写/非法级别名导入即崩）
+_VALID_LOG_LEVELS = frozenset(logging._nameToLevel.keys())
 
 # 数值键白名单（B2.4/C0.5：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认）
 _NUMERIC_BASE_KEYS = ("sample_rate", "channels")
@@ -35,11 +38,15 @@ _STRING_BASE_KEYS = (
 )
 _STRING_UI_KEYS = ("font_family", "cover_image_filter")
 
-# 容器键白名单（C0.5：animation/colors/card_size 非 dict/list 会致消费点解包崩）
-_CONTAINER_UI_KEYS = ("animation", "colors", "card_size")
-
 # 拟真度默认档位回退字面量（C2.4 单源：effects.json 缺 default_level 时的统一回退值）
 DEFAULT_REALISM_LEVEL = "refined"
+
+# 容器内部数值键白名单（D0.1：animation.record_spin_ms 等嵌套数值键递归校验；
+# card_size=None 表示 list 容器元素全数值校验）
+_NESTED_NUMERIC = {
+    "animation": ("record_spin_ms", "tonearm_drop_ms"),
+    "card_size": None,
+}
 
 
 @dataclass
@@ -67,35 +74,69 @@ def _sanitize_types(
     data: dict[str, Any],
     numeric_keys: tuple[str, ...] = (),
     string_keys: tuple[str, ...] = (),
-    container_keys: tuple[str, ...] = (),
+    dict_keys: tuple[str, ...] = (),
+    list_keys: tuple[str, ...] = (),
+    nested_numeric: dict[str, tuple[str, ...] | None] | None = None,
+    valid_values: dict[str, frozenset] | None = None,
+    values_must_be_dict: bool = False,
 ) -> dict[str, Any]:
-    # B2.4/C0.5 类型校验：白名单数值/字符串/容器键类型非法 → 移除键 + 告警（消费点回退默认，不崩溃）
+    # B2.4/C0.5/D0.1 类型校验：白名单数值/字符串/字典/列表键、嵌套数值、值域、值全 dict 校验
+    # 非法（含 null）→ 移除键 + 告警（消费点回退默认，不崩溃）
     result = dict(data)
+
+    def _drop(key, value):
+        _logger.warning("静态配置键类型非法（已移除，回退默认）: %s = %r", key, value)
+        result.pop(key, None)
+
     for key in numeric_keys:
         value = result.get(key)
-        if (
-            value is not None
-            and type(value) is not int
-            and not isinstance(value, float)
-        ):
-            _logger.warning(
-                "静态配置数值键类型非法（已移除，回退默认）: %s = %r", key, value
-            )
-            result.pop(key, None)
+        if value is None or (type(value) is not int and not isinstance(value, float)):
+            _drop(key, value)
     for key in string_keys:
         value = result.get(key)
-        if value is not None and not isinstance(value, str):
-            _logger.warning(
-                "静态配置字符串键类型非法（已移除，回退默认）: %s = %r", key, value
-            )
-            result.pop(key, None)
-    for key in container_keys:
+        if value is None or not isinstance(value, str):
+            _drop(key, value)
+    for key in dict_keys:
         value = result.get(key)
-        if value is not None and not isinstance(value, (dict, list)):
-            _logger.warning(
-                "静态配置容器键类型非法（已移除，回退默认）: %s = %r", key, value
-            )
-            result.pop(key, None)
+        if value is None or not isinstance(value, dict):
+            _drop(key, value)
+    for key in list_keys:
+        value = result.get(key)
+        if value is None or not isinstance(value, list):
+            _drop(key, value)
+    for key, valid in (valid_values or {}).items():
+        value = result.get(key)
+        if value is not None and value not in valid:
+            _drop(key, value)
+    for container, inner in (nested_numeric or {}).items():
+        cv = result.get(container)
+        if inner is None:
+            # list 容器：元素全数值校验（过滤非法元素）
+            if isinstance(cv, list):
+                result[container] = [
+                    v
+                    for v in cv
+                    if v is not None and (type(v) is int or isinstance(v, float))
+                ]
+            continue
+        if isinstance(cv, dict):
+            for key in inner:
+                value = cv.get(key)
+                if value is None or (
+                    type(value) is not int and not isinstance(value, float)
+                ):
+                    if key in cv:
+                        _logger.warning(
+                            "静态配置嵌套数值键类型非法（已移除，回退默认）: %s.%s = %r",
+                            container,
+                            key,
+                            value,
+                        )
+                        cv.pop(key, None)
+    if values_must_be_dict:
+        for key in list(result.keys()):
+            if not isinstance(result[key], dict):
+                _drop(key, result[key])
     return result
 
 
@@ -109,15 +150,26 @@ def _load_static_config() -> StaticConfig:
             data = _read_json(rel_path)
             if key == "base":
                 data = _sanitize_types(
-                    data, numeric_keys=_NUMERIC_BASE_KEYS, string_keys=_STRING_BASE_KEYS
+                    data,
+                    numeric_keys=_NUMERIC_BASE_KEYS,
+                    string_keys=_STRING_BASE_KEYS,
+                    valid_values={"log_level": _VALID_LOG_LEVELS},
                 )
             elif key == "ui":
                 data = _sanitize_types(
                     data,
                     numeric_keys=_NUMERIC_UI_KEYS,
                     string_keys=_STRING_UI_KEYS,
-                    container_keys=_CONTAINER_UI_KEYS,
+                    dict_keys=("animation", "colors"),
+                    list_keys=("card_size",),
+                    nested_numeric=_NESTED_NUMERIC,
                 )
+            elif key == "effects":
+                data = _sanitize_types(
+                    data, string_keys=("default_level",), dict_keys=("levels",)
+                )
+            elif key == "item_types":
+                data = _sanitize_types(data, values_must_be_dict=True)
             setattr(result, key, data)
         else:
             _logger.warning("静态配置映射缺少分类: %s", key)

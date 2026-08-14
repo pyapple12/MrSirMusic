@@ -254,3 +254,41 @@
 - [x] C4.1 全量探针回归 —— 18 探针全量 + 冒烟 + --version 0.1.0.2；验证：全 PASS（✅ 完成：22 探针（A1-A14 + B0-B3 + C0-C3）全部 PASS；冒烟 smoke OK；--version 0.1.0.2）
 - [x] C4.2 端到端复走 —— probe_a14_integration（含档位切换动画场景）；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 C0-C3 修复后复走通过）
 - [x] C4.3 文档同步 —— 勾选附记录；z.plan 附录 A002 状态行改 ✅；base.json version → 0.1.0.2 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A002 状态行更新 + base.json/README 版本 0.1.0.2 + A1/B1 探针断言同步）
+
+## D. 第 3 轮审计修复任务清单（依据 z.plan.md 附录 A003，2026-08-15）
+
+- 约定：P 级条目含简单修复方案（`—— 做法`）与可执行验证；修复后跑全量探针回归（AGENTS.md 命令）；版本随本轮审计修复 P+1 → 0.1.0.3
+
+### D0. P0 正确性
+
+> ✅ D0.1-D0.5 全部完成（2026-08-15）：探针 .temp/probe_d0_fixes.py 五项 PASS；全量 23 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] D0.1 白名单覆盖面补全（P2-1）—— static_config：① _sanitize_types 扩展到 effects（levels 容器键 + default_level 字符串键）与 item_types（各记录容器键）；② 容器键按类型区分（animation/colors 仅 dict、card_size 仅 list）；③ 容器内部数值键（record_spin_ms/tonearm_drop_ms/card_size 元素）递归校验；验证：误写 effects.levels/item_types/容器内部类型后导入不崩断言（✅ 完成：_sanitize_types 重构（dict_keys/list_keys/nested_numeric/values_must_be_dict 参数）+ 四分类全部应用；effects.levels/item_types 坏记录/嵌套数值移除断言）
+- [x] D0.2 log_level 值域校验（P2-2）—— settings 顶层 log_level 校验改"类型 str + 值 ∈ logging._nameToLevel"（非法移除+告警，白名单侧）；null 值也移除；验证：小写/非法级别名导入不崩断言（✅ 完成：_VALID_LOG_LEVELS 值域 + valid_values 参数；null 随类型校验一并移除）
+- [x] D0.3 progress_percent 下界钳制（P2-3）—— convert 补 max(0, ...) + 注释/说明区同步；验证：负值断言 0（✅ 完成：max(0, min(100, ...)) 双界钳制；-50 → 0 断言）
+- [x] D0.4 SIDE_FLIPPED 单次发射（P2-4）—— engine 翻面事件去重（翻面瞬间发一次，B 面内切换不发：发射条件加"刚翻面"标记而非 flipped 常驻）；验证：B 面切两首只发一次断言（✅ 完成：_just_flipped 标记（load_item 复位/play_next 进入 B 面首置位/flip 置位），发射后清除；B 面两首只发一次断言）
+- [x] D0.5 ERROR 后状态同步（P2-5）—— engine._on_player_error 非 NoError 时同步 _emit_state("stopped")；验证：模拟错误后 state == "stopped" 断言（✅ 完成：非 NoError 且非 stopped 时同步 stopped）
+
+### D1. P1 去重
+
+> ✅ D1.1 完成（2026-08-15）：探针 .temp/probe_d1_d2.py PASS；全量 24 探针回归 PASS
+
+- [x] D1.1 migration 死 import 清理（P2-6）—— migration.py:7 从 import 移除 DB_PATH（保留 SCHEMA_VERSION/create_schema）；验证：源码断言 + 冒烟（✅ 完成：import 移除 DB_PATH 值绑定；B0 探针同步删 MIG_DB 引用）
+
+### D2. P2 配置化
+
+> ✅ D2.1 完成（2026-08-15）：探针 .temp/probe_d1_d2.py PASS；全量 24 探针回归 PASS
+
+- [x] D2.1 logger 说明区修正（P2-7）—— logger.py:46 说明区"可调参数后续可外置"改"logs_dir/log_level 走 base.json（B2.2 外置）"；验证：人工核对（✅ 完成：说明区更新为配置化描述）
+
+### D3. P3 清理
+
+（本轮无 P3 项——观察项维持参考级）
+
+### D4. 验证与收尾
+
+> ✅ D4.1-D4.3 全部完成（2026-08-15）：全量 24 探针 PASS + 冒烟 55 模块 + --version 0.1.0.3；z.plan 附录 A003 状态行已更新；**D 系列（第 3 轮审计修复）12 项全部落地**
+
+- [x] D4.1 全量探针回归 —— 22 探针全量 + 冒烟 + --version 0.1.0.3；验证：全 PASS（✅ 完成：24 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2）全部 PASS；冒烟 smoke OK；--version 0.1.0.3）
+- [x] D4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 D0-D2 修复后复走通过）
+- [x] D4.3 文档同步 —— 勾选附记录；z.plan 附录 A003 状态行改 ✅；base.json version → 0.1.0.3 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A003 状态行更新 + base.json/README 版本 0.1.0.3 + A1/B1 探针断言同步）

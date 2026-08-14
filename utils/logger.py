@@ -37,10 +37,11 @@ def get_logger(name: str = "app") -> logging.Logger:
 
 
 # ===== utils/logger.py 函数/常量说明 =====
-# LOG_DIR / LOG_FILE: 日志目录与文件路径（项目根 logs/，文件编码 UTF-8，*.log 已 gitignore）
+# LOG_DIR / LOG_FILE: 日志目录与文件路径（base.json logs_dir 装配，UTF-8，*.log 已 gitignore）
+# LOG_LEVEL: 日志级别（base.json log_level 装配，B2.2 外置）
 # _LOG_FORMAT: 日志行格式（时间/级别/模块名/消息）
 # get_logger(name) -> logging.Logger: 获取统一 logger
 #   逻辑：logging.getLogger(name) → 无 handler 时装配控制台 + 文件双输出 → 返回
 #   异常：文件 handler 装配失败静默跳过（控制台输出不中断，自愈策略）
 #   设计理由：模块名作为 logger 名（任务要求）；UTF-8 编码保证中文日志不乱码
-#   关联配置：无（路径固定项目根 logs/，可调参数后续可外置 base.json）
+#   关联配置：config/static/base.json（logs_dir/log_level，B2.2 外置）
