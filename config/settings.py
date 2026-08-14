@@ -5,7 +5,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from config.static.static_config import DEFAULT_REALISM_LEVEL, get_static_config
+from config.static.static_config import (
+    DEFAULT_REALISM_LEVEL,
+    _fallback_level,
+    get_static_config,
+)
 from utils.logger import get_logger
 from utils.paths import project_root
 
@@ -21,7 +25,7 @@ class AppConfig:
     # 用户可调配置聚合：拟真度档位（默认读 effects.json 单源，回退常量 C2.4）+ 自动翻面
     realism_level: str = field(
         default_factory=lambda: str(
-            get_static_config().effects.get("default_level", DEFAULT_REALISM_LEVEL)
+            get_static_config().effects.get("default_level", _fallback_level())
         )
     )
     auto_flip: bool = False
@@ -70,9 +74,7 @@ def save_config(cfg: AppConfig) -> None:
     level = (
         cfg.realism_level
         if cfg.realism_level in _VALID_LEVELS
-        else str(
-            get_static_config().effects.get("default_level", DEFAULT_REALISM_LEVEL)
-        )
+        else str(get_static_config().effects.get("default_level", _fallback_level()))
     )
     try:
         USER_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -102,14 +104,18 @@ def add_change_listener(callback: Callable[[AppConfig], None]) -> None:
 
 
 # ===== config/settings.py 函数/常量说明 =====
-# USER_CONFIG_PATH: 用户配置文件路径（config/user_config.json，gitignore；随项目模式）
-# AppConfig(dataclass): 用户可调配置（realism_level 拟真度档位 / auto_flip 自动翻面）
-# _changed_listeners: 变更回调注册表（模块级列表，保存后逐个调用）
+# USER_CONFIG_PATH: 用户配置文件路径（config/user_config.json，gitignore；project_root 收敛 C1.3）
+# AppConfig(dataclass): 用户可调配置（realism_level 拟真度档位，默认读 effects.json 单源回退 _fallback_level / auto_flip 自动翻面）
+# _changed_listeners: 变更回调注册表（模块级列表，保存后逐个调用；C1.3 去重）
+# _VALID_LEVELS: 档位白名单（effects.json levels 键；B3.4 非法档位回退默认）
+# _config_cache: 配置缓存（B3.12 懒加载，save 后失效）
 # load_config() -> AppConfig: 读取配置
-#   逻辑：json 读取 → 逐字段类型校验（宽容解析：字符串/bool 不符回退默认）→ 返回
+#   逻辑：缓存懒加载（B3.12）→ _load_from_disk 磁盘读取（宽容解析 + 档位白名单校验）
 #   异常：坏 JSON/缺文件/非对象 → 返回默认配置（不崩溃，AGENTS.md 宽容解析）
+# _load_from_disk() -> AppConfig: 磁盘读取（缓存未命中时调用）
+#   逻辑：json 读取 → realism_level 白名单校验（非法回退默认）+ auto_flip bool 校验
 # save_config(cfg) -> None: 保存配置
-#   逻辑：目录确保 → json 覆盖写（UTF-8）→ 触发全部变更回调
-#   异常：写失败静默返回（下次启动回退默认）；回调异常单独捕获不影响其他回调
-# add_change_listener(callback) -> None: 注册变更回调（保存成功后触发）
-#   关联配置：config/user_config.json（运行时生成，已 gitignore）
+#   逻辑：目录确保 → 档位白名单校验（非法回退默认）→ json 覆盖写（UTF-8）→ 失效缓存 → 触发回调
+#   异常：写失败日志告警（不抛出）；回调异常单独捕获不影响其他回调
+# add_change_listener(callback) -> None: 注册变更回调（保存成功后触发；同一回调去重）
+#   关联配置：config/user_config.json（运行时生成，已 gitignore）；effects.json（档位白名单）

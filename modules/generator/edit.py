@@ -1,9 +1,9 @@
-# 编辑模块（A8.3）：加曲（实时容量校验）/移除/改名/改 Tag，均持久化
+# 编辑模块（A8.3/F2.1）：加曲（实时容量校验）/移除（空物品拦截）/改名/改 Tag，均持久化
 
-from modules.items.factory import remove_track as _remove_track
 from modules.items.model import Item, Track
 from modules.library.repository import save_item, update_item
 from modules.rules.capacity import fits
+from modules.rules.generate_check import check_item
 
 
 def add_track(item: Item, side_label: str, track: Track) -> tuple[bool, str]:
@@ -22,8 +22,14 @@ def add_track(item: Item, side_label: str, track: Track) -> tuple[bool, str]:
 
 
 def remove_track(item: Item, side_label: str, index: int) -> bool:
-    # 按序号移除曲目（内存移除 + 完整持久化）；越界/面缺失返回 False
-    if not _remove_track(item, side_label, index):
+    # 按序号移除曲目：内存移除 → check_item 校验（F2.1 空物品拒绝保存 + 回滚）→ 持久化
+    side = item.side_for(side_label)
+    if side is None or not (0 <= index < len(side.tracks)):
+        return False
+    removed = side.tracks.pop(index)
+    problems = check_item(item)
+    if problems:
+        side.tracks.insert(index, removed)  # F2.1：拒绝后回滚（内存与库一致）
         return False
     save_item(item)
     return True

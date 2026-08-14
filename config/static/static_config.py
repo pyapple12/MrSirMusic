@@ -42,6 +42,17 @@ _STRING_UI_KEYS = ("font_family", "cover_image_filter")
 # 拟真度默认档位回退字面量（C2.4 单源：effects.json 缺 default_level 时的统一回退值）
 DEFAULT_REALISM_LEVEL = "refined"
 
+
+def _fallback_level() -> str:
+    # 默认档位回退（F0.6）：字面量不在 levels 时取 levels 首键，避免回退链自引用写无效档位
+    levels = get_static_config().effects.get("levels", {})
+    if isinstance(levels, dict) and DEFAULT_REALISM_LEVEL in levels:
+        return DEFAULT_REALISM_LEVEL
+    if isinstance(levels, dict) and levels:
+        return next(iter(levels))
+    return DEFAULT_REALISM_LEVEL
+
+
 # 容器内部数值键白名单（D0.1：animation.record_spin_ms 等嵌套数值键递归校验；
 # card_size=None 表示 list 容器元素全数值校验）
 _NESTED_NUMERIC = {
@@ -91,7 +102,12 @@ def _sanitize_types(
 
     for key in numeric_keys:
         value = result.get(key)
-        if value is None or (type(value) is not int and not isinstance(value, float)):
+        # F3.2：数值键统一 >0 下界（0/负值无业务意义：尺寸/阈值/间隔/时长）
+        if (
+            value is None
+            or (type(value) is not int and not isinstance(value, float))
+            or value <= 0
+        ):
             _drop(key, value)
     for key in string_keys:
         value = result.get(key)
@@ -117,7 +133,9 @@ def _sanitize_types(
                 filtered = [
                     v
                     for v in cv
-                    if v is not None and (type(v) is int or isinstance(v, float))
+                    if v is not None
+                    and (type(v) is int or isinstance(v, float))
+                    and v > 0  # F1.1：元素 >0
                 ]
                 if len(filtered) == 2:
                     result[container] = filtered
@@ -192,20 +210,42 @@ def _load_static_config() -> StaticConfig:
                         "default_level 不在 levels 键中（已移除，回退默认）: %s", dl
                     )
                     data.pop("default_level", None)
+                if not isinstance(levels, dict) and "default_level" in data:
+                    # F0.6：levels 缺失/非 dict 时 default_level 一并移除（防回退链自引用写无效档位）
+                    _logger.warning(
+                        "levels 缺失时 default_level 一并移除（防无效档位）"
+                    )
+                    data.pop("default_level", None)
             elif key == "item_types":
                 data = _sanitize_types(data, values_must_be_dict=True)
-                # E0.6：记录内 minutes_per_side 数值非法 → 移除该记录（防消费点 int() 崩）
+                # E0.6/F0.5：记录内字段校验（minutes_per_side 数值、side list 且元素 ∈ A/B），非法移除记录
                 for type_key, rec in list(data.items()):
                     if not isinstance(rec, dict):
                         continue
                     mp = rec.get("minutes_per_side")
-                    if mp is None or (
-                        type(mp) is not int and not isinstance(mp, float)
+                    if (
+                        mp is None
+                        or (type(mp) is not int and not isinstance(mp, float))
+                        or mp <= 0
                     ):
+                        # F1.1：minutes_per_side >0 下界（0 容量 → 生成静默失效）
                         _logger.warning(
                             "载体类型记录数值非法（已移除）: %s.minutes_per_side = %r",
                             type_key,
                             mp,
+                        )
+                        data.pop(type_key, None)
+                        continue
+                    sides = rec.get("side")
+                    if (
+                        not isinstance(sides, list)
+                        or not sides
+                        or not all(s in ("A", "B") for s in sides)
+                    ):
+                        _logger.warning(
+                            "载体类型记录 side 非法（已移除）: %s.side = %r",
+                            type_key,
+                            sides,
                         )
                         data.pop(type_key, None)
             setattr(result, key, data)

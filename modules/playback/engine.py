@@ -77,7 +77,13 @@ class PlaybackEngine:
         # 发曲目切换事件（当前曲目 + 所在面；翻面瞬间附带一次 SIDE_FLIPPED，D0.4）
         side = None
         if self._queue is not None:
-            side = "B" if self._queue.index >= self._queue.boundary else "A"
+            # F3.1：boundary=0（空 A 面）时推导为 A（index>=0 恒真不误判 B）
+            side = (
+                "B"
+                if self._queue.boundary > 0
+                and self._queue.index >= self._queue.boundary
+                else "A"
+            )
         emit(TRACK_CHANGED, TrackChangedPayload(track=self._track, side=side))
         if self._just_flipped and side == "B":
             emit(SIDE_FLIPPED, SideFlippedPayload(side="B"))
@@ -151,8 +157,9 @@ class PlaybackEngine:
         if track is None:
             return False
         if track.is_missing():
-            # E2.1 跳过语义：更新 _track 保持一致（队列位置与展示曲目同步），ERROR + 返回 False（不自动跳过）
+            # E2.1 跳过语义：更新 _track 保持一致 + 发 TRACK_CHANGED（F0.2 UI 展示同步）+ ERROR
             self._track = track
+            self._emit_track()
             _logger.warning("播放失败（文件缺失）: %s", track.path)
             emit(
                 ERROR,
@@ -177,7 +184,11 @@ class PlaybackEngine:
         # D0.4：进入 B 面第一首（刚翻面）时置标记，SIDE_FLIPPED 仅发一次
         if self._queue.flipped and self._queue.index == self._queue.boundary:
             self._just_flipped = True
-        return self._play_current("切至下一首")
+        ok = self._play_current("切至下一首")
+        if not ok and self._just_flipped:
+            # F1.2：自动翻面遇缺失 → 翻面事件不发（与 flip 失败复位对称）
+            self._just_flipped = False
+        return ok
 
     def play_prev(self) -> bool:
         # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持）
@@ -199,6 +210,8 @@ class PlaybackEngine:
             self._queue.index = self._queue.boundary - 1
             self._queue.flipped = False
             self._just_flipped = False
+            self._track = self._queue.current_track()  # F0.3：回滚 _track 到 A 面末
+            self._emit_track()  # F0.2 配套：UI 展示同步回 A 面末
             return False
         _logger.info("手动翻面 → B 面")
         return True

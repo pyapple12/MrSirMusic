@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.1.0.4-blue.svg)](config/static/base.json)
+[![Version](https://img.shields.io/badge/Version-0.1.0.5-blue.svg)](config/static/base.json)
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

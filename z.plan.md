@@ -519,3 +519,65 @@ Track: path / title / artist / album / duration(秒) / format
 - D 系列核心实现正确、零回归；D0.2（log_level 值域）与 D2.1（logger 说明区）修复完整
 - 版本/README/commit 三方一致（0.1.0.3，176373c）
 - 各组实测验证充分（null/长度/0 值/小写级别均实测）
+
+## 附录 A005：全量代码审计报告（第5轮，2026-08-15）
+
+> 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json
+> 方式：三路并行（utils+config / modules / ui）逐文件全文阅读 + git show 30f5348 修复 diff 核对 + 实测验证
+> 状态：✅ 已完成（F 系列修复 2026-08-15 全部落地：F0-F4 共 15 项；全量回归 28 探针 PASS + 冒烟 OK + --version 0.1.0.5；cover 模块已补入库）
+> 结论：P1 1 项（cover 模块未入库——仓库完整性）+ P2 5 项 + P3 7 项；最大发现为仓库级问题（历轮盲区）；问题密度 45→16→7→14→13
+
+## 零、上轮修复复核清单（A004 / E 系列 15 项）
+
+| 复核项             | 现状                                                                                   | 证据                         |
+| ------------------ | -------------------------------------------------------------------------------------- | ---------------------------- |
+| E 系列 15 项在位性 | ✅ 全部在位（commit 30f5348）                                                          | 主会话 grep 11 项 + 各组补查 |
+| 引入回归           | ⚠️ E 系列暴露 4 处新缺口（E0.4 自冲突/E1.1 不完整/E2.1 未达成/E0.6 假安全感）          | 各组实测                     |
+| 仓库完整性         | ❌ modules/cover/ 4 文件从未入库（.gitignore:52 裸 cover/ 误伤）——clone 后应用无法启动 | modules 组 git 核查          |
+
+## 一、P0-P3 修复清单
+
+### P1（高：仓库完整性）
+
+| #    | 文件:行号                  | 类型 | 描述                                                                                                                                                                               | 建议                                                                           | 性质               |
+| ---- | -------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------ |
+| P1-1 | .gitignore:52（裸 cover/） | 12/9 | Python 模板"coverage"段的 cover/（无前导斜杠）匹配任意层级 → modules/cover/ 4 文件从未被 git 跟踪；换机器 clone 后 generator.py:5 顶层 import → ModuleNotFoundError → 应用无法启动 | 该行改为 /coverage/ 或删除；git add -f modules/cover/ 补入库（需用户确认执行） | 新增（仓库级遗留） |
+
+### P2（中）
+
+| #    | 文件:行号                                    | 类型 | 描述                                                                                                                            | 建议                                      | 性质                |
+| ---- | -------------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | ------------------- |
+| P2-1 | engine.py:153-164                            | 4/3  | missing 分支不发 TRACK_CHANGED：引擎 _track 更新但 UI 展示不刷新；auto_flip 自然翻面遇 missing → 自动播放链中断                 | missing 分支补发 TRACK_CHANGED            | 新增（E2.1 未达成） |
+| P2-2 | engine.py:195-202                            | 3/4  | flip 失败回滚不滚 _track（已被置为 B 面 missing 曲目）：回滚后 index 与 _track 错位                                             | 回滚时同步 self._track = 当前队列曲目     | 新增（E1.1 不完整） |
+| P2-3 | deck_view.py:128-132 + 97-99                 | 1    | E0.4 自冲突：_on_track side=="A" 无条件 setEnabled(True) 覆盖 load_item 单面禁用——CD 播放必触发，翻面按钮对 CD 可用但点击无反馈 | setEnabled(side=="A" and len(sides)>1)    | 新增（E0.4 自冲突） |
+| P2-4 | static_config.py:195-210 + model.py:22-23    | 2    | item_types side 字段未校验（E0.6 只覆盖 minutes_per_side）：误写 int → for s in 123 TypeError 确定性崩溃                        | E0.6 同机制覆盖 side（list + A/B 白名单） | 新增（E0.6 缺口）   |
+| P2-5 | static_config.py:183-194 + settings.py:70-76 | 12   | E0.7 回退链自引用（两路径实测）：DEFAULT_REALISM_LEVEL 不在 levels 时 save 写无效档位 → 档位永久失效                            | 字面量 ∈ levels 校验/动态化               | 新增（E0.7 不完整） |
+
+### P3（低）
+
+| #    | 文件:行号                                       | 类型 | 描述                                                                                           |
+| ---- | ----------------------------------------------- | ---- | ---------------------------------------------------------------------------------------------- |
+| P3-1 | static_config.py:112-131 + shelf_view.py:99-100 | 2    | card_size 元素无 >0 下界（[0,90] → 按钮不可见）                                                |
+| P3-2 | static_config.py:198-210                        | 2    | minutes_per_side 无 >0 下界（0 → 容量 0 → 生成静默失效）                                       |
+| P3-3 | engine.py:177-179 + 82-84                       | 3    | _just_flipped 复位不完整（自动翻面遇 missing 残留 → SIDE_FLIPPED 延迟；play_prev 回 A 不复位） |
+| P3-4 | edit.py:24-29 + regenerate.py                   | 1/13 | edit.remove_track 全删后直接 save_item 无 check_item——可制造空物品入库（与生成路径不一致）     |
+| P3-5 | engine.py:80 + deck_view.py:128-136             | 1    | 空 A 面物品 side 误推导 "B"（boundary=0 时 index>=0 恒真）                                     |
+| P3-6 | settings.py:104-115                             | 6    | 说明区缺 _load_from_disk/_config_cache/_VALID_LEVELS（四轮遗漏）                               |
+| P3-7 | static_config.py:28 / deck_widget.py:31         | 2    | drag_threshold/spin_tick_ms 0 值无下界（点击即拖/QTimer 忙等）                                 |
+
+## 二、参考级观察项（记录不修）
+
+| 位置                                                                      | 描述                                   | 回落理由                       |
+| ------------------------------------------------------------------------- | -------------------------------------- | ------------------------------ |
+| main_window.py:94,171-173                                                 | message_label 无清除时机               | 不阻塞不崩溃，下次错误覆盖     |
+| model.py:97 + path_check.py                                               | Item.missing_tracks 无消费方           | 播放链实时 is_missing 正确路径 |
+| queue.py:37-42                                                            | prev 回 A 后 flipped 不复位            | side 由 index 推导             |
+| engine.py:37-45                                                           | PlaybackEngine 无 shutdown             | GUI 单实例进程级生命周期       |
+| retry.py:39 / convert.py:8 / logger.py:29-35                              | 不可达分支/inf 溢出/文件 handler 静默  | 均不可达或自愈                 |
+| delete.py:31 / local_provider.py:17-22 / mp3.py:14 / side_allocator.py:16 | 延迟 import/非原子写/纯 ID3 误判/O(n²) | 同前轮回落理由                 |
+| registry.py:37-40 / generator.py:44-49 / repository.py:150                | 单向告警/0 时长不占容量/秒级排序       | 同前轮回落理由                 |
+
+## 三、亮点
+
+- E 系列核心修复在位、零崩溃级回归；版本/README/commit 三方一致（0.1.0.4，30f5348）
+- 各组实测验证充分（side=123/回退链两路径/CD 播放路径）

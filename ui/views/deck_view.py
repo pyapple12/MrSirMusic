@@ -129,7 +129,8 @@ class DeckView(QWidget):
         if side == "A":
             self.flip_button.setText("A 面")
             self.flip_button.setChecked(False)
-            self.flip_button.setEnabled(True)
+            # F0.4：单面载体（CD）保持禁用（load_item 语义不被覆盖）
+            self.flip_button.setEnabled(len(self._item.type.sides) > 1)
         elif side == "B":
             self.flip_button.setText("B 面")
             self.flip_button.setChecked(True)
@@ -140,9 +141,10 @@ class DeckView(QWidget):
         self.progress_widget.on_progress(position_ms, duration_ms)
 
     def _on_side(self, side: str) -> None:
-        # 桥 side_flipped → 翻面按钮显示当前面
+        # 桥 side_flipped → 翻面按钮显示当前面（F0.4：B 面禁用，与 _on_track 一致）
         self.flip_button.setText(f"{side} 面")
         self.flip_button.setChecked(True)
+        self.flip_button.setEnabled(side == "A" and len(self._item.type.sides) > 1)
 
     def dragEnterEvent(self, event) -> None:
         # 拖入：物品 mime 才接受（其他忽略）

@@ -336,3 +336,47 @@
 - [x] E4.1 全量探针回归 —— 24 探针全量 + 冒烟 + --version 0.1.0.4；验证：全 PASS（✅ 完成：26 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2 + E0-E3）全部 PASS；冒烟 smoke OK；--version 0.1.0.4）
 - [x] E4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 E0-E3 修复后复走通过）
 - [x] E4.3 文档同步 —— 勾选附记录；z.plan 附录 A004 状态行改 ✅；base.json version → 0.1.0.4 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A004 状态行更新 + base.json/README 版本 0.1.0.4 + A1/B1 探针断言同步）
+
+## F. 第 5 轮审计修复任务清单（依据 z.plan.md 附录 A005，2026-08-15）
+
+- 约定：P 级条目含简单修复方案（`—— 做法`）与可执行验证；修复后跑全量探针回归（AGENTS.md 命令）；版本随本轮审计修复 P+1 → 0.1.0.5
+
+### F0. P0 正确性
+
+> ✅ F0.1-F0.6 全部完成（2026-08-15）：探针 .temp/probe_f0_fixes.py 六项 PASS；全量 27 探针回归 PASS；冒烟 55 模块 OK；**git add -f modules/cover/ 待用户执行**（F0.1 仅改 .gitignore）
+
+- [x] F0.1 cover 模块补入库（P1-1 仓库完整性）—— .gitignore:52 裸 `cover/` 改 `/coverage/`（或删除）；`git add -f modules/cover/` 补入库（git 写操作由用户执行，AI 只改 .gitignore 并提示）；验证：`git check-ignore -v modules/cover/local_provider.py` 不再命中 + 用户确认 add 后 `git ls-files modules/cover/` 有 4 文件（✅ 完成：.gitignore 裸 cover/ 改 /coverage/（附注释）；git check-ignore 不再命中断言；**git add -f modules/cover/ 待你执行**）
+- [x] F0.2 missing 分支发 TRACK_CHANGED（P2-1）—— engine._play_current missing 分支补 `self._emit_track()`（UI 展示同步缺失曲目）；验证：missing 后 track_changed 事件断言（✅ 完成：missing 分支发 TRACK_CHANGED；事件断言通过）
+- [x] F0.3 flip 回滚同步 _track（P2-2）—— engine.flip 失败回滚分支补 `self._track = self._queue.current_track()`；验证：flip 失败后 current_track 为 A 面末曲目断言（✅ 完成：回滚补 _track 同步 + _emit_track 补发；A 面末断言通过）
+- [x] F0.4 CD 单面按钮禁用修复（P2-3）—— deck_view._on_track 的 setEnabled 改 `side=="A" and len(self._item.type.sides) > 1`（保留单面禁用语义）；验证：CD 播放路径 flip 按钮禁用断言（✅ 完成：_on_track/_on_side 均补单面判断；CD 路径断言通过）
+- [x] F0.5 item_types side 字段校验（P2-4）—— static_config E0.6 同机制覆盖 side（list + 元素 ∈ A/B 白名单，非法移除记录）；验证：side=123 后记录移除 + 加载不崩断言（✅ 完成：side list + A/B 白名单校验；side=123 移除断言）
+- [x] F0.6 回退链自引用修复（P2-5）—— static_config 加载时校验 DEFAULT_REALISM_LEVEL ∈ levels（不在则动态取 levels 首键）；levels 缺失时同步移除 default_level；验证：两路径实证不写无效档位断言（✅ 完成：_fallback_level() 动态回退（字面量→levels 首键）+ levels 缺失同步移除 default_level；settings/registry 消费端引用；两路径断言）
+
+### F1. P1 去重
+
+> ✅ F1.1-F1.2 完成（2026-08-15）：探针 .temp/probe_f1f2f3.py PASS；全量 28 探针回归 PASS
+
+- [x] F1.1 card_size/minutes_per_side >0 下界（P3-1/P3-2）—— nested_numeric list 元素与 item_types minutes_per_side 校验加 >0（与 E0.3 对齐）；验证：0/负值移除断言（✅ 完成：两处 >0 下界；[0,90]→整键移除、minutes_per_side=0→记录移除断言）
+- [x] F1.2 _just_flipped 复位补全（P3-3）—— play_next 自动翻面路径失败时复位 _just_flipped（与 flip 对称）；验证：自然翻面遇 missing 后标记复位断言（✅ 完成：play_next 失败且刚翻面时复位；断言通过）
+
+### F2. P2 配置化
+
+> ✅ F2.1-F2.2 完成（2026-08-15）：探针 .temp/probe_f1f2f3.py PASS；全量 28 探针回归 PASS
+
+- [x] F2.1 编辑路径空物品拦截（P3-4）—— edit.remove_track 移除后补 check_item 校验（空物品拒绝保存）；验证：全删曲目后保存拒绝断言（✅ 完成：remove_track 拦截 + 回滚（内存与库一致）；check_item 顶层 import，删未用 _remove_track）
+- [x] F2.2 settings 说明区补全（P3-6）—— settings.py 说明区补 _load_from_disk/_config_cache/_VALID_LEVELS 三项；验证：人工核对（✅ 完成：说明区补全六项函数/常量描述）
+
+### F3. P3 清理
+
+> ✅ F3.1-F3.2 完成（2026-08-15）：探针 .temp/probe_f1f2f3.py PASS；全量 28 探针回归 PASS
+
+- [x] F3.1 空 A 面 side 推导修正（P3-5）—— engine side 推导加 `boundary > 0` 条件（boundary=0 时 side="A"）；验证：空 A 面物品 side 推导断言（✅ 完成：side 推导 boundary>0 守卫；空 A 面 side="A" 断言）
+- [x] F3.2 顶层数值键 >0 下界（P3-7）—— static_config 数值键校验加 >0（drag_threshold/spin_tick_ms 等，语义上 0 非法的键）；验证：0 值移除断言（✅ 完成：numeric_keys 统一 >0 下界；drag_threshold=0 移除断言）
+
+### F4. 验证与收尾
+
+> ✅ F4.1-F4.3 全部完成（2026-08-15）：全量 28 探针 PASS + 冒烟 55 模块 + --version 0.1.0.5；z.plan 附录 A005 状态行已更新；**F 系列（第 5 轮审计修复）15 项全部落地**
+
+- [x] F4.1 全量探针回归 —— 26 探针全量 + 冒烟 + --version 0.1.0.5；验证：全 PASS（✅ 完成：28 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2 + E0-E3 + F0-F3）全部 PASS；冒烟 smoke OK；--version 0.1.0.5）
+- [x] F4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 F0-F3 修复后复走通过）
+- [x] F4.3 文档同步 —— 勾选附记录；z.plan 附录 A005 状态行改 ✅；base.json version → 0.1.0.5 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A005 状态行更新 + base.json/README 版本 0.1.0.5 + A1/B1 探针断言同步）
