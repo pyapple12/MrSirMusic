@@ -150,10 +150,11 @@ class MainWindow(QMainWindow):
         self.refresh_library(load_all())
 
     def _play_item(self, item_id: str) -> None:
-        # 播放指定物品：加载到唱机视图 → 引擎 load + play（缺失曲目播放时引擎发 ERROR）
+        # 播放指定物品：清除错误提示（G3.2）→ 加载到唱机视图 → 引擎 load + play（缺失曲目播放时引擎发 ERROR）
         item = next((i for i in self._items if i.id == item_id), None)
         if item is None:
             return
+        self.message_label.clear()
         self.deck_view.load_item(item)
         self.engine.load_item(item)
         self.engine.play()

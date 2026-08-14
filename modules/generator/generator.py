@@ -42,6 +42,12 @@ def generate(
         _logger.warning("生成失败（选歌校验未通过）: %s", detail)
         raise GenerateError(f"选歌校验未通过：{detail}")
     sides_data = allocate(tracks, item_type)
+    placed = sum(len(v) for v in sides_data.values())
+    if placed < len(tracks):
+        # G0.2：分配丢弃曲目不静默——中止并明确提示（用户调整选歌）
+        dropped = len(tracks) - placed
+        _logger.warning("生成失败（%d 首曲目超出总容量，未放入任何面）", dropped)
+        raise GenerateError(f"{dropped} 首曲目超出总容量，未放入任何面")
     item = create_item(name, item_type, tag)
     for label, side_tracks in sides_data.items():
         side = item.side_for(label)

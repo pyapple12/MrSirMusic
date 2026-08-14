@@ -1,5 +1,6 @@
-# 本地封面提供器（A7.2/B1.3）：用户选封面复制到 music/covers/（UUID 命名）并写回 item.cover_path
+# 本地封面提供器（A7.2/B1.3/G0.3）：用户选封面复制到 music/covers/（UUID 命名）并写回 item.cover_path
 
+import os
 import shutil
 import uuid
 from pathlib import Path
@@ -9,15 +10,21 @@ from modules.items.model import Item
 
 
 def import_cover_file(source: str, item: Item) -> str | None:
-    # 复制用户封面文件到 covers/{uuid4().hex}{原扩展名}（流式复制，不整文件读内存）→ 写回 item.cover_path
+    # 复制用户封面文件到 covers/{uuid4().hex}{原扩展名}（G0.3 原子写：临时文件 + os.replace）→ 写回 cover_path
     try:
         src = Path(source)
         if not src.is_file():
             return None
         COVERS_DIR.mkdir(parents=True, exist_ok=True)
         dst = COVERS_DIR / f"{uuid.uuid4().hex}{src.suffix.lower()}"
-        with src.open("rb") as fin, dst.open("wb") as fout:
-            shutil.copyfileobj(fin, fout)
+        tmp = dst.with_suffix(dst.suffix + ".tmp")
+        try:
+            with src.open("rb") as fin, tmp.open("wb") as fout:
+                shutil.copyfileobj(fin, fout)
+            os.replace(tmp, dst)  # 原子改名：中途失败不留半截目标文件
+        except Exception:
+            tmp.unlink(missing_ok=True)
+            raise
         item.cover_path = str(dst)
         return str(dst)
     except Exception:

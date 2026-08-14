@@ -83,11 +83,11 @@
 - [x] A9.4 decoders/registry.py —— 解码器注册表：`register(exts, probe_fn, decoder)`、`resolve(path)`（扩展名 → 探测链 → 返回解码器）；验证：断言注册与 resolve 命中（✅ 2026-08-14 完成：DecoderEntry + 懒装配内置四格式 + resolve 魔数探测（未注册/探测失败 None））
 - [x] A9.5 decoders/mp3.py、flac.py、wav.py、m4a.py —— 各模块声明 `EXTENSIONS` 与 `probe(path)`（基于 mutagen 或文件头魔数）；第一版解码实际走 QtMultimedia，模块为注册表占位与格式声明；验证：断言四种格式 resolve 正确（✅ 2026-08-14 完成：四格式魔数探测（ID3/0xFFE0、fLaC、RIFF+WAVE、ftyp）真实样本命中、.ogg 未注册不命中）
 - [x] A9.6 queue.py 播放队列 —— 由 Item 生成：`[SideA.tracks..., SideB.tracks...]` + 当前索引 + 翻面标记；`next()/prev()` 边界处理（A 面末 → 自动翻面或停止，取决于 settings.auto_flip）；验证：状态机断言（含翻面路径）（✅ 2026-08-14 完成：build_queue 面内展平 + boundary；探针抓到 next() 普通推进分支覆盖翻面点的 bug，翻面判定前置后状态机 3/2 auto_flip 路径全对）
-- [x] A9.7 progress.py 进度上报 —— 定时器（1s）读引擎位置 → emit PROGRESS；播放结束 → emit TRACK_CHANGED + 自动 next/stop；验证：探针监听事件流（✅ 2026-08-14 完成：QTimer 1s + _report 发 PROGRESS（位置/时长）+ 订阅 ended → play_next（失败 stop）；shutdown 退订防悬挂）
+- [x] A9.7 progress.py 进度上报 —— 定时器（1s）读引擎位置 → emit PROGRESS；播放结束 → emit TRACK_CHANGED + 自动 next/stop；验证：探针监听事件流（✅ 2026-08-14 完成：QTimer 1s + \_report 发 PROGRESS（位置/时长）+ 订阅 ended → play_next（失败 stop）；shutdown 退订防悬挂）
 
 ## A10. 事件桥接（ui/bridge/）
 
-- [x] A10.1 event_bridge.py —— 订阅 core 事件 → 转 Qt 信号（stateChanged/trackChanged/progress/sideFlipped/error），桥内持有 QObject 载体；验证：offscreen 下 Qt 信号收发断言（✅ 2026-08-14 完成：_SignalCarrier(QObject) 五信号 + 五事件订阅转发（payload 安全读取）；五类信号收发断言通过）
+- [x] A10.1 event_bridge.py —— 订阅 core 事件 → 转 Qt 信号（stateChanged/trackChanged/progress/sideFlipped/error），桥内持有 QObject 载体；验证：offscreen 下 Qt 信号收发断言（✅ 2026-08-14 完成：\_SignalCarrier(QObject) 五信号 + 五事件订阅转发（payload 安全读取）；五类信号收发断言通过）
 - [x] A10.2 生命周期管理 —— 桥销毁时自动退订全部 core 事件（防悬挂回调）；验证：探针析构后 emit 无回调触发（✅ 2026-08-14 完成：shutdown() 退订全部（幂等）；退订后 emit 零回调 + 新桥不受影响（桥间隔离）断言通过）
 
 ## A11. UI 基础
@@ -104,13 +104,13 @@
 - [x] A12.1 record_widget.py —— 按 ItemType.shape 绘制物品形态（circle：黑胶同心圆+封面中心；rect：磁带盒造型）；基础质感（渐变/阴影）；无动画；验证：offscreen 渲染 → 保存截图 → 人工核对（✅ 2026-08-14 完成：record_circle.png 核对通过（黑胶渐变圆盘+槽纹+中心封面圆）；record_rect.png 核对通过（磁带盒渐变壳+上窗+底部标签）；placeholder 红色符合预期）
 - [x] A12.2 deck_widget.py 唱机 —— 转盘旋转（QTimer + QPainter 旋转，角度随播放状态）、唱针落下/抬起（插值动画）、播放中视觉反馈；动画时长读 ui.json；验证：offscreen 动画帧推进断言（角度变化）（✅ 2026-08-14 完成：deck_playing.png 核对通过（转盘圆盘+唱针播放态落下姿态）；角度推进/唱针插值断言通过）
 - [x] A12.3 progress_widget.py —— 进度条 + 时间（mm:ss）；来自 PROGRESS 事件驱动；验证：offscreen 注入进度断言显示（✅ 2026-08-14 完成：on_progress(3000,10000) → bar=30%/时间 "0:03 / 0:10"；边界值断言）
-- [x] A12.4 拖放 —— 置物架/物品库拖物品卡片到唱机区域 → 触发播放；验证：Qt 拖放事件模拟断言（✅ 2026-08-14 完成：ui/dnd 契约（encode/decode/is_item_drag 回环）；DraggableCardButton（shelf_view）+ _ItemList（library_view 拖出 mime 带 id）；deck_view dropEvent → item_dropped 信号断言）
+- [x] A12.4 拖放 —— 置物架/物品库拖物品卡片到唱机区域 → 触发播放；验证：Qt 拖放事件模拟断言（✅ 2026-08-14 完成：ui/dnd 契约（encode/decode/is_item_drag 回环）；DraggableCardButton（shelf_view）+ \_ItemList（library_view 拖出 mime 带 id）；deck_view dropEvent → item_dropped 信号断言）
 
 ## A13. 拟真度效果（ui/effects/）
 
 - [x] A13.1 registry.py —— 按 effects.json 装配：读档位 → 生成效果器实例列表（wear/weathering/动画开关）；`apply(item_widget, level)` 接口；验证：断言三档装配结果与配置一致（✅ 2026-08-14 完成：effects.json 驱动（三档+强度+动画开关）；build_effects/apply/animations_enabled 全断言通过）
 - [x] A13.2 wear.py —— 磨损/风化贴图：data/textures/ 下预置 PNG（噪点/划痕/泛黄），绘制时按强度叠加（QPainter drawImage + opacity）；验证：offscreen 截图人工核对（✅ 2026-08-14 完成：record_realistic.png 核对通过（磨损噪点+风化泛黄清晰可见）；record_refined.png 核对通过（轻磨损无泛黄）；两档差异清晰）
-- [x] A13.3 动画联动 —— deck 动画启停随档位（concise 关、refined 转盘、realistic 全部）；验证：档位切换断言动画 timer 启停（✅ 2026-08-14 完成：set_animations_enabled(False) → timer 不启动/角度不推进/唱针瞬时落位；启用后 timer 启动/角度推进；修复 _tick 角度推进未检查动画开关 bug）
+- [x] A13.3 动画联动 —— deck 动画启停随档位（concise 关、refined 转盘、realistic 全部）；验证：档位切换断言动画 timer 启停（✅ 2026-08-14 完成：set_animations_enabled(False) → timer 不启动/角度不推进/唱针瞬时落位；启用后 timer 启动/角度推进；修复 \_tick 角度推进未检查动画开关 bug）
 - [x] A13.4 settings 联动 —— 拟真度档位/自动翻面从 settings 读写（user_config.json），设置面板 UI；重启保持；验证：改档位 → 重启 → 断言持久化（✅ 2026-08-14 完成：SettingsDialog（档位下拉+自动翻面勾选）→ save_config 持久化 + 变更通知 + load_config 回显断言；main_window 设置菜单接线）
 
 ## A14. 集成与验收
@@ -138,17 +138,17 @@
 
 > ✅ B0.1-B0.14 全部完成（2026-08-14）：探针 .temp/probe_b0_fixes.py 十四项 PASS；全量 15 探针回归 PASS（A1-A14 + B0）；冒烟 51 模块 OK；主题/档位/右键路由/拟物控件接入全链路生效
 
-- [x] B0.1 播放三路径缺失文件检查 —— engine.py play_next/play_prev/flip 开头加 is_missing 检查：缺失 → emit ERROR(file_missing) + 日志 + 跳过下一首/返回 False（与 play() 行为一致）；验证：构造缺失文件探针断言 ERROR 事件（✅ 2026-08-15 完成：抽 _play_current 统一三路径缺失检查（ERROR(file_missing) + 日志 + 返回 False））
+- [x] B0.1 播放三路径缺失文件检查 —— engine.py play_next/play_prev/flip 开头加 is_missing 检查：缺失 → emit ERROR(file_missing) + 日志 + 跳过下一首/返回 False（与 play() 行为一致）；验证：构造缺失文件探针断言 ERROR 事件（✅ 2026-08-15 完成：抽 \_play_current 统一三路径缺失检查（ERROR(file_missing) + 日志 + 返回 False））
 - [x] B0.2 生成空物品拦截 —— generator.generate 开头校验 files 非空（空 → GenerateError）；入库前调 check_item；验证：generate([]) 抛 GenerateError + 空物品 check 拒绝（✅ 2026-08-15 完成：files 空校验抛 GenerateError + check_item 入库前校验（顺带封面导入失败日志））
 - [x] B0.3 DB_PATH 单点收敛 —— schema.py 提供 get_db_path()/set_db_path_for_tests()，repository/migration/delete 运行时取单一来源（消除四模块值绑定副本）；验证：探针 set_db_path 后删除操作不碰真实库（✅ 2026-08-15 完成：repository 提供 set_db_path_for_tests/get_db_path；delete 引用统一路径 + 引用查询异常保守 True（防误删共享封面）+ unlink 路径消毒）
-- [x] B0.4 拟真度档位接线 —— main_window 注册 add_change_listener（档位 → registry.apply + animations_enabled → 控件），启动时应用 load_config().realism_level；验证：改档位后控件 effects/timer 变化断言（**依赖 B0.14：控件接入后执行本项验证**）（✅ 2026-08-15 完成：main_window 注册监听器 + 启动应用（_apply_realism → apply_effects_level + set_animations_enabled））
+- [x] B0.4 拟真度档位接线 —— main_window 注册 add_change_listener（档位 → registry.apply + animations_enabled → 控件），启动时应用 load_config().realism_level；验证：改档位后控件 effects/timer 变化断言（**依赖 B0.14：控件接入后执行本项验证**）（✅ 2026-08-15 完成：main_window 注册监听器 + 启动应用（\_apply_realism → apply_effects_level + set_animations_enabled））
 - [x] B0.5 主题应用接线 —— main.py run_gui 加 apply_theme(app) 一行；验证：GUI init 后 app.styleSheet() 非空（✅ 2026-08-15 完成：run_gui 延迟导入 + apply_theme(app) 接入）
-- [x] B0.6 右键三信号路由 —— main_window 连接 edit_requested/regenerate_requested/delete_requested → 调 generator.edit/regenerate/delete → refresh_library；验证：模拟点击后库变化断言（✅ 2026-08-15 完成：三信号接线（_edit_item 改名对话框/ _regenerate_item / _delete_item）+ refresh_library；edit/regenerate/delete 死代码随之消除）
-- [x] B0.7 停止后唱针抬起 —— deck_widget.set_playing(False) 补 _tonearm_pos=0.0+update()（或停止后继续插值）；验证：停止后 tonearm_position 趋近 0（✅ 2026-08-15 完成：set_playing(False) 瞬时抬起（_tonearm_pos=0.0 + update）；A12 探针旧断言同步修正）
+- [x] B0.6 右键三信号路由 —— main_window 连接 edit_requested/regenerate_requested/delete_requested → 调 generator.edit/regenerate/delete → refresh_library；验证：模拟点击后库变化断言（✅ 2026-08-15 完成：三信号接线（\_edit_item 改名对话框/ \_regenerate_item / \_delete_item）+ refresh_library；edit/regenerate/delete 死代码随之消除）
+- [x] B0.7 停止后唱针抬起 —— deck_widget.set_playing(False) 补 \_tonearm_pos=0.0+update()（或停止后继续插值）；验证：停止后 tonearm_position 趋近 0（✅ 2026-08-15 完成：set_playing(False) 瞬时抬起（\_tonearm_pos=0.0 + update）；A12 探针旧断言同步修正）
 - [x] B0.8 换物品旧封面残留 —— deck_view.load_item 封面无效分支 cover_label.clear()/setText("无封面")；验证：有封面→无封面切换断言（✅ 2026-08-15 完成：RecordWidget.set_item 全量重绘（B0.14 控件接入后架构性解决，无旧封面残留））
 - [x] B0.9 queue 空 A 面 boundary —— build_queue 改 boundary 直接记录 A 面曲目数（空 A 面不误用 B 面数）；验证：A 空 B 有曲物品 next 翻面断言（✅ 2026-08-15 完成：first_side 标记修正（探针抓到 `if boundary==0` 二次命中 bug），空 A 面 boundary=0）
 - [x] B0.10 编辑加曲防重 —— edit.add_track 前按 path 查重（重复 → (False, 中文原因)）；验证：重复 path 拒绝断言（✅ 2026-08-15 完成：全物品范围 path 查重（"曲目已存在"中文原因））
-- [x] B0.11 deck 文本分发改状态字段（O-1 提升）—— DeckView 加 self._playing 显式状态驱动按钮文本与分发（不依赖文本回读）；验证：状态缺失场景行为正确断言（✅ 2026-08-15 完成：_playing 状态字段驱动文本与分发）
+- [x] B0.11 deck 文本分发改状态字段（O-1 提升）—— DeckView 加 self.\_playing 显式状态驱动按钮文本与分发（不依赖文本回读）；验证：状态缺失场景行为正确断言（✅ 2026-08-15 完成：\_playing 状态字段驱动文本与分发）
 - [x] B0.12 容量边界比较统一（O-3 提升）—— fits/allocate/add_track_to_side 统一"先加后比 <= 容量"；验证：边界浮点用例断言（✅ 2026-08-15 完成：fits 改先加后比（与 allocate/add_track_to_side 同口径））
 - [x] B0.13 dragMoveEvent 补实现 —— deck_view 加 dragMoveEvent acceptProposedAction；验证：拖放模拟断言（✅ 2026-08-15 完成：dragMoveEvent 补实现（is_item_drag → acceptProposedAction））
 - [x] B0.14 拟物控件接入 DeckView —— DeckView 布局改造：封面区改用 RecordWidget（set_item 显示物品形态，set_effects 叠加磨损/风化）、播放区嵌入 DeckWidget（set_playing 联动转盘/唱针、set_animations_enabled 随档位）、进度改用 ProgressWidget（on_progress 驱动）；联动接线：桥 state_changed → deck_widget.set_playing、桥 progress → progress_widget.on_progress、load_item → record_widget.set_item + deck_widget 复位；验证：offscreen 探针断言 DeckView 内三控件存在、load_item 后 RecordWidget 渲染非空、桥事件驱动后 DeckWidget 角度推进 + ProgressWidget 时间文本更新（**B0.4 依赖本项：控件接入后档位接线验证才成立**）（✅ 2026-08-15 完成：DeckView 重写（三控件接入 + 桥联动 state→set_playing / progress→on_progress）+ progress_bar 兼容别名保留）
@@ -157,7 +157,7 @@
 
 > ✅ B1.1-B1.4 全部完成（2026-08-15）：探针 .temp/probe_b1_dedup.py 四项 PASS；全量 16 探针回归 PASS；B0 探针 B0.1 断言修正（errors 未重置）
 
-- [x] B1.1 main.py 版本单通道 —— main.py 改 `from config.static.static_config import get_static_config`（删 _STATIC_DIR/json.loads 直读）；验证：--version 输出不变 + 冒烟（✅ 完成：get_static_config 单例读取 + isinstance(str) 校验（含 O-5）；--version 0.1.0.0 + import main OK）
+- [x] B1.1 main.py 版本单通道 —— main.py 改 `from config.static.static_config import get_static_config`（删 \_STATIC_DIR/json.loads 直读）；验证：--version 输出不变 + 冒烟（✅ 完成：get_static_config 单例读取 + isinstance(str) 校验（含 O-5）；--version 0.1.0.0 + import main OK）
 - [x] B1.2 项目根派生收敛 —— 新增 utils/paths.py（project_root()），main/logger/schema/static_config 统一引用；验证：四模块路径一致断言（✅ 完成：utils/paths.py 新建；logger/schema/static_config 三处收敛，main 不再派生）
 - [x] B1.3 local_provider 复用流式复制 —— import_cover_file 改 shutil.copyfileobj（或 safe_copy 扩展返回值复用）；验证：复制回环断言（✅ 完成：copyfileobj 流式复制，内容/写回断言）
 - [x] B1.4 进度换算去重 —— 抽公共换算函数（utils/convert）供 progress_widget/deck_view 共用；验证：两处输出一致断言（✅ 完成：convert.progress_percent 单点实现；ProgressWidget.on_progress 引用；边界 0/30/75/99 断言）
@@ -169,7 +169,7 @@
 - [x] B2.1 data_dir 键消费 —— placeholder_provider/wear.py 改用 base["data_dir"]；验证：路径装配断言（✅ 完成：两处改 project_root()/data_dir 装配）
 - [x] B2.2 日志外置 —— base.json 加 logs_dir/log_level，logger.py 引用（默认值同现状）；验证：日志文件位置断言（✅ 完成：base.json 加两键；logger 顶层解包；static_config 改回 **file** 去 utils 依赖防循环）
 - [x] B2.3 音频扩展名单源 —— AUDIO_EXTENSIONS 由 decoders 注册表导出（file_utils 引用）；验证：导入过滤与注册表一致断言（✅ 完成：registry 懒装配交叉校验（不在白名单 → 告警）+ registered_extensions() 断言一致）
-- [x] B2.4 静态配置类型校验 —— static_config 加载后按白名单校验数值/字符串类型（非法 → 回退默认 + 告警）；验证：误改类型后加载容错断言（✅ 完成：_NUMERIC_BASE_KEYS/_NUMERIC_UI_KEYS 白名单 + _sanitize_types；探针改坏类型后回退断言）
+- [x] B2.4 静态配置类型校验 —— static_config 加载后按白名单校验数值/字符串类型（非法 → 回退默认 + 告警）；验证：误改类型后加载容错断言（✅ 完成：\_NUMERIC_BASE_KEYS/\_NUMERIC_UI_KEYS 白名单 + \_sanitize_types；探针改坏类型后回退断言）
 - [x] B2.5 配置死键处置 —— ui.json library_column_widths 删除；base.json sample_rate/channels 标注预留注释（播放引擎接入时消费）；验证：grep 零引用 + 文档同步（✅ 完成：library_column_widths 删除；sample_rate/channels 保留预留）
 - [x] B2.6 默认档位单源 —— settings.AppConfig.realism_level 默认值改由 registry.default_level() 提供；验证：三处一致断言（✅ 完成：AppConfig 默认读 effects.json default_level（default_factory）；registry 同源）
 - [x] B2.7 主题色外置 —— ui.json colors 增补 hover/border/background/text 等键，QSS 全引用；验证：样式表含新色断言（✅ 完成：colors 增补 6 键，themes QSS 全部引用）
@@ -180,24 +180,24 @@
 
 > ✅ B3.1-B3.19 全部完成（2026-08-15）：探针 .temp/probe_b3_cleanup.py 十九项 PASS；全量 18 探针回归 PASS；B3.5/B3.11/B3.19 在前组顺带完成；A1/A3/A13/A14 旧探针同步（缓存语义/is_full 删除/日志占用）
 
-- [x] B3.1 死代码处置 —— 无消费函数删除或标注预留：retry、file_utils 三函数、seconds_from_ms、to_float32、add_track_to_side、is_full、result_item、空"视图"菜单、engine._url_cls；验证：grep 确认（✅ 完成：删除 add_track_to_side/is_full/_url_cls/空视图菜单；retry/file_utils/convert/result_item 标注预留；A3 探针同步改走 rules/capacity）
+- [x] B3.1 死代码处置 —— 无消费函数删除或标注预留：retry、file_utils 三函数、seconds_from_ms、to_float32、add_track_to_side、is_full、result_item、空"视图"菜单、engine.\_url_cls；验证：grep 确认（✅ 完成：删除 add_track_to_side/is_full/\_url_cls/空视图菜单；retry/file_utils/convert/result_item 标注预留；A3 探针同步改走 rules/capacity）
 - [x] B3.2 注释失实修正 —— convert.py:26 弹性转换说明、static_config.py:12 A2.1 统一、record_widget 磁带盒"封面或色块"、deck_widget 唱针注释；验证：人工核对（✅ 完成：record_widget 磁带盒注释改"色块占位"；其余三处已在前组顺带修正）
 - [x] B3.3 retry 参数校验 —— 工厂入口校验 times>=1/delay>=0/exceptions 非空（无效抛 ValueError）；验证：边界断言（✅ 完成：三参数校验抛 ValueError）
-- [x] B3.4 settings 档位校验 + 保存提示 —— load/save 按 levels 白名单校验（非法回退默认）；save 失败 logger.warning；验证：非法档位断言（✅ 完成：_VALID_LEVELS 白名单 + load/save 回退 + save 失败日志）
+- [x] B3.4 settings 档位校验 + 保存提示 —— load/save 按 levels 白名单校验（非法回退默认）；save 失败 logger.warning；验证：非法档位断言（✅ 完成：\_VALID_LEVELS 白名单 + load/save 回退 + save 失败日志）
 - [x] B3.5 delete.py 清理 —— sqlite3 import 置顶、删未用 load_item、unlink 前校验 Path(cover_path) 在 COVERS_DIR 内；验证：静态检查 + 篡改场景断言（✅ 完成：B0.3 顺带（import 置顶/删 load_item/COVERS_DIR 校验））
-- [x] B3.6 migrate 执行缓存 —— repository 模块级 _migrated 标记（连接后仅首次 migrate）；验证：连接次数探针（✅ 完成：_migrated_path 按库路径记录（切换路径自动重迁移），连接计数探针断言）
-- [x] B3.7 双排序移除 —— load_all 路径去内层 sorted（load_item 保留）；验证：顺序断言（✅ 完成：_row_to_item 加 assume_sorted，load_all 传 True）
+- [x] B3.6 migrate 执行缓存 —— repository 模块级 \_migrated 标记（连接后仅首次 migrate）；验证：连接次数探针（✅ 完成：\_migrated_path 按库路径记录（切换路径自动重迁移），连接计数探针断言）
+- [x] B3.7 双排序移除 —— load_all 路径去内层 sorted（load_item 保留）；验证：顺序断言（✅ 完成：\_row_to_item 加 assume_sorted，load_all 传 True）
 - [x] B3.8 event_bus 可观测性 —— emit 异常捕获时 logger.warning；subscribe 去重；验证：异常场景断言（✅ 完成：异常记日志隔离 + 订阅去重）
 - [x] B3.9 providers 懒装配竞态 —— 装配加模块级锁或改模块加载时构建；验证：并发首调断言（可选）（✅ 完成：双重检查锁（threading.Lock））
-- [x] B3.10 未知 type 日志 —— _row_to_item 未知 type 时 logger.warning；验证：构造未知 type 断言日志（✅ 完成：未知载体类型 warning 记录）
+- [x] B3.10 未知 type 日志 —— \_row_to_item 未知 type 时 logger.warning；验证：构造未知 type 断言日志（✅ 完成：未知载体类型 warning 记录）
 - [x] B3.11 封面导入失败日志 —— generator 封面失败 warning（不影响生成）；验证：失败场景日志断言（✅ 完成：B0.2 顺带（封面导入失败 warning））
-- [x] B3.12 load_item 配置缓存 —— settings 层加缓存（engine 不再每次全量读 json）；验证：读文件次数断言（✅ 完成：_config_cache 懒加载 + save 后失效；A1/A13 探针同步（模拟重启重置缓存））
-- [x] B3.13 progress duration 用播放器 —— _report 优先 engine 播放器时长，标签值兜底；验证：无标签样本进度断言（✅ 完成：engine.duration_ms() + 标签兜底）
+- [x] B3.12 load_item 配置缓存 —— settings 层加缓存（engine 不再每次全量读 json）；验证：读文件次数断言（✅ 完成：\_config_cache 懒加载 + save 后失效；A1/A13 探针同步（模拟重启重置缓存））
+- [x] B3.13 progress duration 用播放器 —— \_report 优先 engine 播放器时长，标签值兜底；验证：无标签样本进度断言（✅ 完成：engine.duration_ms() + 标签兜底）
 - [x] B3.14 resolve 区分原因 —— decoders resolve 返回 (entry, reason)（未注册/探测失败可区分）；验证：两场景断言（✅ 完成：resolve_with_reason 返回 (entry, "not_registered"/"probe_failed"/"ok")；resolve 兼容包装）
-- [x] B3.15 wear 失败缓存 —— 缺失贴图也缓存 None（避免每帧 IO）；验证：调用次数断言（✅ 完成：成功/失败均入 _texture_cache）
-- [x] B3.16 intensity 宽容转换 —— registry float 转换 try 回退 0.0；验证：坏值断言（✅ 完成：_to_float 容错）
+- [x] B3.15 wear 失败缓存 —— 缺失贴图也缓存 None（避免每帧 IO）；验证：调用次数断言（✅ 完成：成功/失败均入 \_texture_cache）
+- [x] B3.16 intensity 宽容转换 —— registry float 转换 try 回退 0.0；验证：坏值断言（✅ 完成：\_to_float 容错）
 - [x] B3.17 bridge **del** 兜底 —— EventBridge 加 **del** 调 shutdown（try 包裹）；验证：析构后 emit 无回调（✅ 完成：**del** 兜底退订）
-- [x] B3.18 shelf 空标签重建（O-2 提升）—— set_items 每次重建 _empty_label（不 deleteLater 复用）；验证：空→有→空时序断言（✅ 完成：空标签局部重建，删持久属性）
+- [x] B3.18 shelf 空标签重建（O-2 提升）—— set_items 每次重建 \_empty_label（不 deleteLater 复用）；验证：空→有→空时序断言（✅ 完成：空标签局部重建，删持久属性）
 - [x] B3.19 版本类型校验（O-5 提升）—— main.get_version 加 isinstance(str) 校验（非字符串回退 unknown）；验证：非字符串 version 断言（✅ 完成：B1.1 顺带（isinstance 校验））
 
 ### B4. 验证与收尾
@@ -216,17 +216,17 @@
 
 > ✅ C0.1-C0.5 全部完成（2026-08-15）：探针 .temp/probe_c0_fixes.py 五项 PASS；全量 19 探针回归 PASS；冒烟 55 模块 OK
 
-- [x] C0.1 档位切换动画冻结修复 —— deck_widget.set_animations_enabled 的 enabled=True 且 _playing 时补 timer.start()（与关闭分支对称）；验证：播放中 False→True 切换后 timer.isActive() 断言（✅ 完成：elif _playing 分支补 timer.start()；探针断言 timer 重启）
-- [x] C0.2 errorOccurred 连接（P1-1 遗留）—— engine._ensure_player 连接 errorOccurred → emit ERROR(playback_error) + 日志；验证：模拟错误信号断言 ERROR 事件（✅ 完成：_on_player_error 回调（NoError 忽略，其余 ERROR(playback_error) + 日志））
-- [x] C0.3 封面残留补修（P1-5 遗留）—— record_widget.set_item 封面加载失败分支补 self._cover = None；验证：local 封面文件删除后换物品断言 _cover 为 None（✅ 完成：set_item 先清空再加载（旧封面残留彻底修复））
+- [x] C0.1 档位切换动画冻结修复 —— deck_widget.set_animations_enabled 的 enabled=True 且 \_playing 时补 timer.start()（与关闭分支对称）；验证：播放中 False→True 切换后 timer.isActive() 断言（✅ 完成：elif \_playing 分支补 timer.start()；探针断言 timer 重启）
+- [x] C0.2 errorOccurred 连接（P1-1 遗留）—— engine.\_ensure_player 连接 errorOccurred → emit ERROR(playback_error) + 日志；验证：模拟错误信号断言 ERROR 事件（✅ 完成：\_on_player_error 回调（NoError 忽略，其余 ERROR(playback_error) + 日志））
+- [x] C0.3 封面残留补修（P1-5 遗留）—— record_widget.set_item 封面加载失败分支补 self.\_cover = None；验证：local 封面文件删除后换物品断言 \_cover 为 None（✅ 完成：set_item 先清空再加载（旧封面残留彻底修复））
 - [x] C0.4 封面失败语义统一（P1-6）—— generator 封面导入失败时降级 item.cover_source="placeholder"（或日志改"生成中止"）；验证：失败场景生成成功且占位图兜底断言（✅ 完成：失败降级 placeholder + 清 cover_path，生成继续）
-- [x] C0.5 白名单覆盖补全（P1-3）—— static_config 白名单扩：字符串键（log_level/music_dir/data_dir/logs_dir）+ 容器键（animation/colors/card_size）类型校验（非法移除+告警）；验证：误写类型后各消费点回退默认断言（✅ 完成：_STRING_*_KEYS/_CONTAINER_UI_KEYS 扩展 + _sanitize_types 三参数化；探针改坏类型断言移除）
+- [x] C0.5 白名单覆盖补全（P1-3）—— static*config 白名单扩：字符串键（log_level/music_dir/data_dir/logs_dir）+ 容器键（animation/colors/card_size）类型校验（非法移除+告警）；验证：误写类型后各消费点回退默认断言（✅ 完成：\_STRING*\*\_KEYS/\_CONTAINER_UI_KEYS 扩展 + \_sanitize_types 三参数化；探针改坏类型断言移除）
 
 ### C1. P1 去重
 
 > ✅ C1.1-C1.3 全部完成（2026-08-15）：探针 .temp/probe_c1_dedup.py 三项 PASS；全量 20 探针回归 PASS；冒烟 55 模块 OK
 
-- [x] C1.1 migration 路径单点（P1-8 遗留）—— migration._connect 改走 repository.get_db_path()（消除 schema.DB_PATH 值绑定）；验证：set_db_path_for_tests 后无参 migrate 不碰真实库（✅ 完成：_connect 延迟 import get_db_path（repository↔migration 循环依赖结构性例外，注释说明）；无参 migrate 在测试库建表断言）
+- [x] C1.1 migration 路径单点（P1-8 遗留）—— migration.\_connect 改走 repository.get_db_path()（消除 schema.DB_PATH 值绑定）；验证：set_db_path_for_tests 后无参 migrate 不碰真实库（✅ 完成：\_connect 延迟 import get_db_path（repository↔migration 循环依赖结构性例外，注释说明）；无参 migrate 在测试库建表断言）
 - [x] C1.2 retry 类型边界（P2-4）—— times 校验排除 bool（isinstance bool）；delay 加 (int,float) 类型检查；验证：times=True/delay="0.1" 抛 ValueError（✅ 完成：times 排除 bool + delay (int,float) 排除 bool，统一抛 ValueError）
 - [x] C1.3 settings 路径收敛 + 回调可观测（P2-3）—— USER_CONFIG_PATH 改 project_root() 派生；get_logger 顶部 import；回调异常 warning + 按回调去重；验证：路径一致 + 重复注册只触发一次（✅ 完成：路径收敛 + 顶部 import + 回调异常 warning + 去重）
 
@@ -235,7 +235,7 @@
 > ✅ C2.1-C2.4 全部完成（2026-08-15）：探针 .temp/probe_c2_config.py 四项 PASS；全量 21 探针回归 PASS；冒烟 55 模块 OK
 
 - [x] C2.1 probe 流式读取（P1-2 遗留）—— decoders 四格式 probe 改 with open() as f: f.read(12)；验证：大文件探测无全量读盘（源码断言 + 行为）（✅ 完成：四格式改流式读取（mp3 3 字节/flac 4/wav 12/m4a 12）+ 行为断言）
-- [x] C2.2 import_dialog 底层兜底（P1-4 遗留）—— _on_ok 加 except Exception → QMessageBox 提示后 return；验证：mock 底层异常不炸出（✅ 完成：except Exception 兜底提示；mock generate 抛 RuntimeError 断言不炸出 + 提示弹出）
+- [x] C2.2 import_dialog 底层兜底（P1-4 遗留）—— \_on_ok 加 except Exception → QMessageBox 提示后 return；验证：mock 底层异常不炸出（✅ 完成：except Exception 兜底提示；mock generate 抛 RuntimeError 断言不炸出 + 提示弹出）
 - [x] C2.3 progress_percent 钳制（P2-1）—— 返回值 min(100, ...) + 注释修正；验证：超界输入断言 100（✅ 完成：min(100, ...) 钳制 + 注释含"钳制"）
 - [x] C2.4 回退字面量收敛（P2-7）—— settings/registry 回退 "refined" 统一经 default_level()（或单常量）；验证：三处一致断言（✅ 完成：static_config 新增 DEFAULT_REALISM_LEVEL 单源常量；settings 两处/registry 一处引用）
 
@@ -243,8 +243,8 @@
 
 > ✅ C3.1-C3.3 全部完成（2026-08-15）：探针 .temp/probe_c3_cleanup.py 三项 PASS；全量 22 探针回归 PASS；冒烟 55 模块 OK
 
-- [x] C3.1 _connect 目录确保（P1-7）—— repository._connect 前 Path(get_db_path()).parent.mkdir(parents=True, exist_ok=True)；验证：music/ 删除后首连不崩（✅ 完成：_connect 加父目录确保；深层不存在路径建库断言）
-- [x] C3.2 event_bus bound method 去重（P2-5）—— 判重改 (event, callback.**self**, callback.**func**) 三元组（或弱引用）；验证：同实例重复订阅只收一次（✅ 完成：_callback_key 判重键（bound method 按 id(self)+id(func)，普通函数/lambda 按 id）；不同 lambda 不误判）
+- [x] C3.1 \_connect 目录确保（P1-7）—— repository.\_connect 前 Path(get_db_path()).parent.mkdir(parents=True, exist_ok=True)；验证：music/ 删除后首连不崩（✅ 完成：\_connect 加父目录确保；深层不存在路径建库断言）
+- [x] C3.2 event_bus bound method 去重（P2-5）—— 判重改 (event, callback.**self**, callback.**func**) 三元组（或弱引用）；验证：同实例重复订阅只收一次（✅ 完成：\_callback_key 判重键（bound method 按 id(self)+id(func)，普通函数/lambda 按 id）；不同 lambda 不误判）
 - [x] C3.3 注释/文案修正（P2-2/P2-6）—— main.py 说明区更新（单例通道）、run_gui 文案改"GUI 依赖缺失"；验证：人工核对（✅ 完成：说明区改单例通道描述；文案改"GUI 依赖缺失（请检查 PySide6 安装）"）
 
 ### C4. 验证与收尾
@@ -263,11 +263,11 @@
 
 > ✅ D0.1-D0.5 全部完成（2026-08-15）：探针 .temp/probe_d0_fixes.py 五项 PASS；全量 23 探针回归 PASS；冒烟 55 模块 OK
 
-- [x] D0.1 白名单覆盖面补全（P2-1）—— static_config：① _sanitize_types 扩展到 effects（levels 容器键 + default_level 字符串键）与 item_types（各记录容器键）；② 容器键按类型区分（animation/colors 仅 dict、card_size 仅 list）；③ 容器内部数值键（record_spin_ms/tonearm_drop_ms/card_size 元素）递归校验；验证：误写 effects.levels/item_types/容器内部类型后导入不崩断言（✅ 完成：_sanitize_types 重构（dict_keys/list_keys/nested_numeric/values_must_be_dict 参数）+ 四分类全部应用；effects.levels/item_types 坏记录/嵌套数值移除断言）
-- [x] D0.2 log_level 值域校验（P2-2）—— settings 顶层 log_level 校验改"类型 str + 值 ∈ logging._nameToLevel"（非法移除+告警，白名单侧）；null 值也移除；验证：小写/非法级别名导入不崩断言（✅ 完成：_VALID_LOG_LEVELS 值域 + valid_values 参数；null 随类型校验一并移除）
+- [x] D0.1 白名单覆盖面补全（P2-1）—— static_config：① \_sanitize_types 扩展到 effects（levels 容器键 + default_level 字符串键）与 item_types（各记录容器键）；② 容器键按类型区分（animation/colors 仅 dict、card_size 仅 list）；③ 容器内部数值键（record_spin_ms/tonearm_drop_ms/card_size 元素）递归校验；验证：误写 effects.levels/item_types/容器内部类型后导入不崩断言（✅ 完成：\_sanitize_types 重构（dict_keys/list_keys/nested_numeric/values_must_be_dict 参数）+ 四分类全部应用；effects.levels/item_types 坏记录/嵌套数值移除断言）
+- [x] D0.2 log_level 值域校验（P2-2）—— settings 顶层 log_level 校验改"类型 str + 值 ∈ logging.\_nameToLevel"（非法移除+告警，白名单侧）；null 值也移除；验证：小写/非法级别名导入不崩断言（✅ 完成：\_VALID_LOG_LEVELS 值域 + valid_values 参数；null 随类型校验一并移除）
 - [x] D0.3 progress_percent 下界钳制（P2-3）—— convert 补 max(0, ...) + 注释/说明区同步；验证：负值断言 0（✅ 完成：max(0, min(100, ...)) 双界钳制；-50 → 0 断言）
-- [x] D0.4 SIDE_FLIPPED 单次发射（P2-4）—— engine 翻面事件去重（翻面瞬间发一次，B 面内切换不发：发射条件加"刚翻面"标记而非 flipped 常驻）；验证：B 面切两首只发一次断言（✅ 完成：_just_flipped 标记（load_item 复位/play_next 进入 B 面首置位/flip 置位），发射后清除；B 面两首只发一次断言）
-- [x] D0.5 ERROR 后状态同步（P2-5）—— engine._on_player_error 非 NoError 时同步 _emit_state("stopped")；验证：模拟错误后 state == "stopped" 断言（✅ 完成：非 NoError 且非 stopped 时同步 stopped）
+- [x] D0.4 SIDE_FLIPPED 单次发射（P2-4）—— engine 翻面事件去重（翻面瞬间发一次，B 面内切换不发：发射条件加"刚翻面"标记而非 flipped 常驻）；验证：B 面切两首只发一次断言（✅ 完成：\_just_flipped 标记（load_item 复位/play_next 进入 B 面首置位/flip 置位），发射后清除；B 面两首只发一次断言）
+- [x] D0.5 ERROR 后状态同步（P2-5）—— engine.\_on_player_error 非 NoError 时同步 \_emit_state("stopped")；验证：模拟错误后 state == "stopped" 断言（✅ 完成：非 NoError 且非 stopped 时同步 stopped）
 
 ### D1. P1 去重
 
@@ -304,24 +304,24 @@
 - [x] E0.1 drag_threshold 白名单补全（P2-1 遗留）—— static_config `_NUMERIC_UI_KEYS` 加入 "drag_threshold"；验证：误写 null/字符串后加载不崩断言（✅ 完成：白名单补键；null 移除断言）
 - [x] E0.2 card_size 长度契约（P2-2）—— static_config nested 过滤后校验长度==2（否则整键移除回退默认）；验证：`[110]`/`[110,90,999]`/全非法元素后消费点回退断言（✅ 完成：过滤后长度≠2 整键移除 + 告警；`[110,'x']` 移除断言）
 - [x] E0.3 animation 值域下界（P2-3）—— nested_numeric 数值校验加 >0 下界（或 deck_widget `_spin_ms` 补 `max(1, ...)` 与 `_drop_ms` 对称）；验证：record_spin_ms=0 后不除零断言（✅ 完成：白名单 >0 下界 + 消费端 max(1, int(...)) 对称保护）
-- [x] E0.4 翻面按钮态同步（P2-4）—— deck_view `_on_track` 按 payload.side 同步 flip_button 文本/checked（A 面复位 "A 面"/unchecked）；B 面时 flip 按钮禁用或文本区分；验证：B→A 切换后按钮态断言（✅ 完成：_on_track 按 side 同步（A 复位/B 禁用）+ load_item 单面禁用；B 面 disabled 断言——探针自身断言写反已修正）
-- [x] E0.5 错误提示不被覆盖（P2-5）—— main_window 状态栏拆"状态 + 消息"双 label（或 _on_error 设置消息后不被状态覆盖）；验证：模拟错误后状态栏含错误文案断言（✅ 完成：message_label 独立于 state_label；错误后状态更新不覆盖消息）
-- [x] E0.6 item_types 记录内数值校验（P2-6）—— static_config item_types 分类记录内 minutes_per_side 数值校验（非法移除记录）；验证：误写后加载/消费不崩断言（✅ 完成：_sanitize 后记录内数值校验，非法移除记录 + 告警）
+- [x] E0.4 翻面按钮态同步（P2-4）—— deck_view `_on_track` 按 payload.side 同步 flip_button 文本/checked（A 面复位 "A 面"/unchecked）；B 面时 flip 按钮禁用或文本区分；验证：B→A 切换后按钮态断言（✅ 完成：\_on_track 按 side 同步（A 复位/B 禁用）+ load_item 单面禁用；B 面 disabled 断言——探针自身断言写反已修正）
+- [x] E0.5 错误提示不被覆盖（P2-5）—— main_window 状态栏拆"状态 + 消息"双 label（或 \_on_error 设置消息后不被状态覆盖）；验证：模拟错误后状态栏含错误文案断言（✅ 完成：message_label 独立于 state_label；错误后状态更新不覆盖消息）
+- [x] E0.6 item_types 记录内数值校验（P2-6）—— static_config item_types 分类记录内 minutes_per_side 数值校验（非法移除记录）；验证：误写后加载/消费不崩断言（✅ 完成：\_sanitize 后记录内数值校验，非法移除记录 + 告警）
 - [x] E0.7 default_level 值域校验（P2-7）—— static_config effects 分类校验 default_level ∈ levels 键（非法移除）；验证：不一致后回退断言（✅ 完成：default_level 不在 levels 键移除 + 告警）
 
 ### E1. P1 去重
 
 > ✅ E1.1-E1.2 完成（2026-08-15）：探针 .temp/probe_e1e2e3.py PASS；全量 26 探针回归 PASS
 
-- [x] E1.1 flip 失败标记复位（P3-1）—— engine.flip 失败路径补 `_just_flipped = False`（_play_current 返回 False 时复位）；验证：B 面首曲 missing 后 flip 返回 False 且标记复位断言（✅ 完成：flip 失败回滚 A 面末 + flipped/_just_flipped 双复位）
+- [x] E1.1 flip 失败标记复位（P3-1）—— engine.flip 失败路径补 `_just_flipped = False`（\_play_current 返回 False 时复位）；验证：B 面首曲 missing 后 flip 返回 False 且标记复位断言（✅ 完成：flip 失败回滚 A 面末 + flipped/\_just_flipped 双复位）
 - [x] E1.2 load_item 状态复位（P3-2）—— engine.load_item 末尾补 `self.state = "stopped"`（不发事件仅字段复位）；验证：load 后 state 断言（✅ 完成：load_item 状态字段复位；playing 后 load 断言 stopped）
 
 ### E2. P2 配置化
 
 > ✅ E2.1-E2.2 完成（2026-08-15）：探针 .temp/probe_e1e2e3.py PASS；全量 26 探针回归 PASS
 
-- [x] E2.1 missing 曲目 index 回滚（P3-3）—— engine.play_next/play_prev/flip 的 _play_current 失败（missing）时回滚队列 index（或记录"跳过"语义）；验证：missing 后 index 恢复断言（✅ 完成：**跳过语义**（回滚方案会卡死缺失曲目，改为 missing 时更新 _track 保持一致 + index 保持推进可跳过）；flip 失败回滚 A 面末；B0 探针兼容）
-- [x] E2.2 说明区同步组（P3-4/3-5/3-7）—— migration.py:62 说明区改 get_db_path 描述；progress.py:75 改"已外置"；static_config 说明区删 _CONTAINER_UI_KEYS 旧名/更新签名与四分类描述；convert.py:34-35 补双界；retry.py:53 删"后续可外置"句；验证：人工核对 + 源码断言（✅ 完成：5 文件说明区全部同步，源码断言通过）
+- [x] E2.1 missing 曲目 index 回滚（P3-3）—— engine.play_next/play_prev/flip 的 \_play_current 失败（missing）时回滚队列 index（或记录"跳过"语义）；验证：missing 后 index 恢复断言（✅ 完成：**跳过语义**（回滚方案会卡死缺失曲目，改为 missing 时更新 \_track 保持一致 + index 保持推进可跳过）；flip 失败回滚 A 面末；B0 探针兼容）
+- [x] E2.2 说明区同步组（P3-4/3-5/3-7）—— migration.py:62 说明区改 get_db_path 描述；progress.py:75 改"已外置"；static_config 说明区删 \_CONTAINER_UI_KEYS 旧名/更新签名与四分类描述；convert.py:34-35 补双界；retry.py:53 删"后续可外置"句；验证：人工核对 + 源码断言（✅ 完成：5 文件说明区全部同步，源码断言通过）
 
 ### E3. P3 清理
 
@@ -346,25 +346,25 @@
 > ✅ F0.1-F0.6 全部完成（2026-08-15）：探针 .temp/probe_f0_fixes.py 六项 PASS；全量 27 探针回归 PASS；冒烟 55 模块 OK；**git add -f modules/cover/ 待用户执行**（F0.1 仅改 .gitignore）
 
 - [x] F0.1 cover 模块补入库（P1-1 仓库完整性）—— .gitignore:52 裸 `cover/` 改 `/coverage/`（或删除）；`git add -f modules/cover/` 补入库（git 写操作由用户执行，AI 只改 .gitignore 并提示）；验证：`git check-ignore -v modules/cover/local_provider.py` 不再命中 + 用户确认 add 后 `git ls-files modules/cover/` 有 4 文件（✅ 完成：.gitignore 裸 cover/ 改 /coverage/（附注释）；git check-ignore 不再命中断言；**git add -f modules/cover/ 待你执行**）
-- [x] F0.2 missing 分支发 TRACK_CHANGED（P2-1）—— engine._play_current missing 分支补 `self._emit_track()`（UI 展示同步缺失曲目）；验证：missing 后 track_changed 事件断言（✅ 完成：missing 分支发 TRACK_CHANGED；事件断言通过）
-- [x] F0.3 flip 回滚同步 _track（P2-2）—— engine.flip 失败回滚分支补 `self._track = self._queue.current_track()`；验证：flip 失败后 current_track 为 A 面末曲目断言（✅ 完成：回滚补 _track 同步 + _emit_track 补发；A 面末断言通过）
-- [x] F0.4 CD 单面按钮禁用修复（P2-3）—— deck_view._on_track 的 setEnabled 改 `side=="A" and len(self._item.type.sides) > 1`（保留单面禁用语义）；验证：CD 播放路径 flip 按钮禁用断言（✅ 完成：_on_track/_on_side 均补单面判断；CD 路径断言通过）
+- [x] F0.2 missing 分支发 TRACK_CHANGED（P2-1）—— engine.\_play_current missing 分支补 `self._emit_track()`（UI 展示同步缺失曲目）；验证：missing 后 track_changed 事件断言（✅ 完成：missing 分支发 TRACK_CHANGED；事件断言通过）
+- [x] F0.3 flip 回滚同步 \_track（P2-2）—— engine.flip 失败回滚分支补 `self._track = self._queue.current_track()`；验证：flip 失败后 current_track 为 A 面末曲目断言（✅ 完成：回滚补 \_track 同步 + \_emit_track 补发；A 面末断言通过）
+- [x] F0.4 CD 单面按钮禁用修复（P2-3）—— deck_view.\_on_track 的 setEnabled 改 `side=="A" and len(self._item.type.sides) > 1`（保留单面禁用语义）；验证：CD 播放路径 flip 按钮禁用断言（✅ 完成：\_on_track/\_on_side 均补单面判断；CD 路径断言通过）
 - [x] F0.5 item_types side 字段校验（P2-4）—— static_config E0.6 同机制覆盖 side（list + 元素 ∈ A/B 白名单，非法移除记录）；验证：side=123 后记录移除 + 加载不崩断言（✅ 完成：side list + A/B 白名单校验；side=123 移除断言）
-- [x] F0.6 回退链自引用修复（P2-5）—— static_config 加载时校验 DEFAULT_REALISM_LEVEL ∈ levels（不在则动态取 levels 首键）；levels 缺失时同步移除 default_level；验证：两路径实证不写无效档位断言（✅ 完成：_fallback_level() 动态回退（字面量→levels 首键）+ levels 缺失同步移除 default_level；settings/registry 消费端引用；两路径断言）
+- [x] F0.6 回退链自引用修复（P2-5）—— static_config 加载时校验 DEFAULT_REALISM_LEVEL ∈ levels（不在则动态取 levels 首键）；levels 缺失时同步移除 default_level；验证：两路径实证不写无效档位断言（✅ 完成：\_fallback_level() 动态回退（字面量→levels 首键）+ levels 缺失同步移除 default_level；settings/registry 消费端引用；两路径断言）
 
 ### F1. P1 去重
 
 > ✅ F1.1-F1.2 完成（2026-08-15）：探针 .temp/probe_f1f2f3.py PASS；全量 28 探针回归 PASS
 
 - [x] F1.1 card_size/minutes_per_side >0 下界（P3-1/P3-2）—— nested_numeric list 元素与 item_types minutes_per_side 校验加 >0（与 E0.3 对齐）；验证：0/负值移除断言（✅ 完成：两处 >0 下界；[0,90]→整键移除、minutes_per_side=0→记录移除断言）
-- [x] F1.2 _just_flipped 复位补全（P3-3）—— play_next 自动翻面路径失败时复位 _just_flipped（与 flip 对称）；验证：自然翻面遇 missing 后标记复位断言（✅ 完成：play_next 失败且刚翻面时复位；断言通过）
+- [x] F1.2 \_just_flipped 复位补全（P3-3）—— play_next 自动翻面路径失败时复位 \_just_flipped（与 flip 对称）；验证：自然翻面遇 missing 后标记复位断言（✅ 完成：play_next 失败且刚翻面时复位；断言通过）
 
 ### F2. P2 配置化
 
 > ✅ F2.1-F2.2 完成（2026-08-15）：探针 .temp/probe_f1f2f3.py PASS；全量 28 探针回归 PASS
 
-- [x] F2.1 编辑路径空物品拦截（P3-4）—— edit.remove_track 移除后补 check_item 校验（空物品拒绝保存）；验证：全删曲目后保存拒绝断言（✅ 完成：remove_track 拦截 + 回滚（内存与库一致）；check_item 顶层 import，删未用 _remove_track）
-- [x] F2.2 settings 说明区补全（P3-6）—— settings.py 说明区补 _load_from_disk/_config_cache/_VALID_LEVELS 三项；验证：人工核对（✅ 完成：说明区补全六项函数/常量描述）
+- [x] F2.1 编辑路径空物品拦截（P3-4）—— edit.remove_track 移除后补 check_item 校验（空物品拒绝保存）；验证：全删曲目后保存拒绝断言（✅ 完成：remove_track 拦截 + 回滚（内存与库一致）；check_item 顶层 import，删未用 \_remove_track）
+- [x] F2.2 settings 说明区补全（P3-6）—— settings.py 说明区补 \_load_from_disk/\_config_cache/\_VALID_LEVELS 三项；验证：人工核对（✅ 完成：说明区补全六项函数/常量描述）
 
 ### F3. P3 清理
 
@@ -380,3 +380,40 @@
 - [x] F4.1 全量探针回归 —— 26 探针全量 + 冒烟 + --version 0.1.0.5；验证：全 PASS（✅ 完成：28 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2 + E0-E3 + F0-F3）全部 PASS；冒烟 smoke OK；--version 0.1.0.5）
 - [x] F4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 F0-F3 修复后复走通过）
 - [x] F4.3 文档同步 —— 勾选附记录；z.plan 附录 A005 状态行改 ✅；base.json version → 0.1.0.5 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A005 状态行更新 + base.json/README 版本 0.1.0.5 + A1/B1 探针断言同步）
+
+## G. 第 6 轮审计处理观察项升级修复任务清单（依据 z.plan.md 观察项豁免定案清单"已升级转出"，2026-08-15）
+
+- 约定：P 级条目含简单修复方案（`—— 做法`）与可执行验证；修复后跑全量探针回归（AGENTS.md 命令）；版本随本轮修复 P+1 → 0.1.0.6
+
+### G0. P0 正确性
+
+> ✅ G0.1-G0.3 完成（2026-08-15）：探针 .temp/probe_g0g2.py PASS；全量 29 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] G0.1 0 时长曲目拦截（用户裁决 P 级）—— rules/validate.py validate_selection 增加 duration_seconds <= 0 检查（issue："无效时长（0 秒）"）；验证：构造 0 时长曲目断言拒绝（✅ 完成：validate 四类检查（重复/缺失/0 时长/超容）；0 时长拦截断言）
+- [x] G0.2 生成丢弃曲目中止提示（A 方案）—— generator.generate 分配后对比输入曲目数与入面数，有丢弃 → 抛 GenerateError（"N 首曲目超出总容量，未放入任何面"）；验证：超出总容量场景抛 GenerateError 断言（✅ 完成：allocate 后 placed 对比 + GenerateError；超容中止/正常不误伤断言）
+- [x] G0.3 封面导入原子写 —— cover/local_provider.py import_cover_file 改：写同目录 {uuid}.png.tmp 临时文件 → os.replace 原子改名；异常清理临时文件；验证：复制成功回环 + 中途失败不留半截目标（mock 失败断言）（✅ 完成：tmp + os.replace + 异常清理；回环/无 .tmp 残留断言）
+
+### G1. P1 去重
+
+（本轮无条目）
+
+### G2. P2 配置化
+
+> ✅ G2.1 完成（2026-08-15）：探针 .temp/probe_g0g2.py PASS；全量 29 探针回归 PASS
+
+- [x] G2.1 格式清单双向告警（③价值权衡）—— decoders/registry 懒装配反向校验：AUDIO_EXTENSIONS 中无对应解码器的扩展名 → warning 告警（补单向告警反方向）；验证：构造白名单多出格式场景断言告警（✅ 完成：registered 集合反向差集告警"白名单中无对应解码器"；源码断言 + 一致断言）
+
+### G3. P3 清理
+
+> ✅ G3.1-G3.2 完成（2026-08-15）：探针 .temp/probe_g3.py PASS；全量 30 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] G3.1 migrate 连接泄漏 finally（③顺手修定案）—— repository.\_connect 的 migrate(conn) 包 try/finally（异常时 conn.close()）；验证：mock migrate 抛错后连接已关（sqlite3 操作断言）（✅ 完成：migrate 异常 close + 重新上抛；连接关闭断言（ProgrammingError））
+- [x] G3.2 message_label 清除时机（③价值权衡）—— main_window.load_item 时 message_label.clear()（错误提示随新物品载入清除）；验证：load 后 message_label 为空断言（✅ 完成：\_play_item 载入前 clear；载入后为空断言）
+
+### G4. 验证与收尾
+
+> ✅ G4.1-G4.3 全部完成（2026-08-15）：全量 30 探针 PASS + 冒烟 55 模块 + --version 0.1.0.6；z.plan 豁免定案清单"已升级转出"标注完成；**G 系列（观察项升级修复）9 项全部落地**
+
+- [x] G4.1 全量探针回归 —— 28 探针全量 + 冒烟 + --version 0.1.0.6；验证：全 PASS（✅ 完成：30 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2 + E0-E3 + F0-F3 + G0-G3）全部 PASS；冒烟 smoke OK；--version 0.1.0.6）
+- [x] G4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 G0-G3 修复后复走通过）
+- [x] G4.3 文档同步 —— 勾选附记录；z.plan 观察项清单"已升级转出"标注完成；base.json version → 0.1.0.6 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + z.plan 清单三升级项标注 ✅ + base.json/README 版本 0.1.0.6 + A1/B1 探针断言同步）

@@ -214,6 +214,46 @@ Track: path / title / artist / album / duration(秒) / format
 4. **置物架更换**：Shelf 实体化（容量/形态），物品库不动
 5. **独立解码进程**：decoders 注册表已预留，可演进为进程隔离（SpotAmp 管道模式）
 
+## 观察项豁免定案清单（历轮汇总，2026-08-15 分级定稿）
+
+> 分级规则（参照 MrBoard 机制，2026-08-15 定稿）：历轮（A001-A005）参考级观察项经复核，按确定性分三级——
+> ①**永久豁免**：外部约束/设计定案/数据常量/性能可接受/并发理论/外观——后续轮次**不再报告、不再讨论**（除非外部依赖本身变更，如音频格式集合、Qt 行为）
+> ②**条件豁免**：需验证/理论不可达/数据语义——触发条件变化时重新评估（每项标注触发条件）
+> ③**价值权衡**：可修但收益 < 成本——未来批次按需排期
+> 历史归档：历轮附录"二、参考级观察项"为审计记录保留；本清单为豁免唯一权威源，已定案项后续轮次不再重复报告
+
+### ① 永久豁免（不再讨论）
+
+- **分层约束**：三处格式清单（file_utils.AUDIO_EXTENSIONS / decoders 注册表 / tagging._READERS——utils 零业务依赖结构性约束，registry 交叉校验告警兜底）
+- **外观**：绘制色硬编码（record/deck/wear 约 12 处，视觉常量）；themes QProgressBar 无 QSS 规则；空物品文案覆盖；菜单注释残留
+- **并发理论**：static_config 单例懒加载非线程安全（import 期单线程）；档位监听器累积无退订（GUI 单实例）
+- **性能可接受**：reporter 常驻 1s 定时器（1/s 事件量）；side_allocator O(n²)（曲目量级小）；repository load_all 秒级排序不稳；schema DB_PATH import 期计算
+- **设计定案**：PlaybackEngine 无 shutdown（进程级生命周期）；closeEvent 未停 deck timer/engine（QTimer 父销毁自停）；delete.py/record_widget 函数内延迟 import（循环结构/AGENTS.md 例外）；迁移单迁移非原子；decoders 占位模块零消费；providers 循环延迟 import；COVERS_DIR 独立派生（模块解耦）；registry 单向告警（四格式一致）；settings_dialog 非法档位自愈；logger handler 预配场景；message_label 无清除时机（下次错误覆盖）；logger 文件 handler 静默失败（自愈）；effects.levels 内部记录未校验（isinstance 守卫兜底）；sample_rate/channels 预留键；retry 不可达分支；format_duration(inf)；回调重入递归；missing_tracks 无消费方（播放链实时 is_missing 正确路径）；play() missing 不重置 state（ERROR 已提示）；A 面 Side 缺失 boundary 误算（正常链路不可达）；消费点回退字面量（项目惯例）；`logging._nameToLevel` 私有 API（CPython 多年稳定）
+
+### ② 条件豁免（触发条件变化时重新评估）
+
+- 纯 ID3 无帧 probe 误判（mp3.py:14）——触发：decoders resolve 被 UI 实际消费（第一版占位）
+- 封面导入非原子写改造后仍需关注孤儿临时文件——触发：封面写入原子性需求提升（已入 G 系列原子写，见③关联）
+- engine ended 后重播行为——触发：Qt 运行时行为变化（需验证）
+- queue.flipped 从 B 回 A 不复位——触发：side 推导逻辑变更
+
+### ③ 价值权衡（未来批次按需排期，决策记录）
+
+- （原 3 项已全部编入 G 系列任务清单，2026-08-15 移出）：
+  - migrate 异常连接泄漏 → G3.1（加 finally close，成本约 3 行）
+  - 三处格式清单双向告警 → G2.1（白名单多出格式时提示）
+  - `message_label` 加清除时机 → G3.2（load_item 时清）
+
+### 已升级转出（观察项 → P 级修复，用户复核 2026-08-15 定案）
+
+- **0 时长曲目**（A004/A005 观察项）→ G0.1 完成 ✅（validate 增加 duration<=0 拦截）
+- **生成丢弃曲目无提示**（A003/A005 观察项）→ G0.2 完成 ✅（分配差异抛 GenerateError，A 方案）
+- **封面导入非原子写**（A003/A004/A005 观察项）→ G0.3 完成 ✅（临时文件 + os.replace 原子改名）
+
+### 已修复记账（历史记录防重复报告）
+
+- 翻面按钮态漂移（E0.4/F0.4 修复）；spin_tick_ms/drag_threshold 0 值（F3.2）；missing 展示错位（F0.2）；flip 回滚 _track（F0.3）；空 A 面 side 推导（F3.1）；card_size 长度契约（E0.2）；animation 0 值除零（E0.3）；item_types side 校验（F0.5）；默认档位回退链（F0.6）；监听器同实例去重（C1.3）
+
 ## 附录 A001：全量代码审计报告（第1轮，2026-08-14）
 
 > 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json（user_config.json 运行时生成不审）

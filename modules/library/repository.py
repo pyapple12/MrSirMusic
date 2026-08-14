@@ -43,7 +43,11 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     if _migrated_path != db_path:
-        migrate(conn)
+        try:
+            migrate(conn)
+        except Exception:
+            conn.close()  # G3.1：迁移失败关闭连接（防泄漏），异常继续上抛
+            raise
         _migrated_path = db_path
     return conn
 

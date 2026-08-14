@@ -27,17 +27,25 @@ _loaded = False
 
 
 def _ensure_loaded() -> None:
-    # 懒装配：注册内置四格式（mp3/flac/wav/m4a）；扩展名与 AUDIO_EXTENSIONS 白名单交叉校验（B2.3 单源）
+    # 懒装配：注册内置四格式（mp3/flac/wav/m4a）；双向校验（G2.1）：
+    #   ①解码器扩展名 ∉ AUDIO_EXTENSIONS → 告警（按白名单过滤）；②白名单扩展名无解码器 → 告警（无法播放）
     global _loaded
     if _loaded:
         return
     from modules.playback.decoders import flac, m4a, mp3, wav
 
+    registered: set[str] = set()
     for mod in (mp3, flac, wav, m4a):
+        registered.update(mod.EXTENSIONS)
         missing = set(mod.EXTENSIONS) - set(AUDIO_EXTENSIONS)
         if missing:
             _logger.warning("解码器扩展名不在音频白名单（将按白名单过滤）: %s", missing)
         register(mod.EXTENSIONS, mod.probe, mod.decoder)
+    unregistered = set(AUDIO_EXTENSIONS) - registered
+    if unregistered:
+        _logger.warning(
+            "音频白名单中无对应解码器的扩展名（将无法播放）: %s", unregistered
+        )
     _loaded = True
 
 
