@@ -1,8 +1,10 @@
 {
-  "version": "0.1.0.0",
+  "version": "0.1.0.1",
   "app_name": "MrSirMusic",
   "sample_rate": 44100,
   "channels": 2,
   "music_dir": "music",
-  "data_dir": "data"
+  "data_dir": "data",
+  "logs_dir": "logs",
+  "log_level": "INFO"
 }

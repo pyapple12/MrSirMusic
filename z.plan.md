@@ -213,3 +213,108 @@ Track: path / title / artist / album / duration(秒) / format
 3. **网络封面**：modules/cover 增加 network provider（已留接口）
 4. **置物架更换**：Shelf 实体化（容量/形态），物品库不动
 5. **独立解码进程**：decoders 注册表已预留，可演进为进程隔离（SpotAmp 管道模式）
+
+## 附录 A001：全量代码审计报告（第1轮，2026-08-14）
+
+> 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json（user_config.json 运行时生成不审）
+> 方式：三路并行（utils+config / modules / ui）逐文件全文阅读 + 交叉验证（grep 调用点、venv 实测 mutagen/Path 语义）
+> 状态：✅ 已完成（B 系列修复 2026-08-15 全部落地：B0-B4 共 49 项；全量回归 18 探针 PASS + 冒烟 OK + --version 0.1.0.0）
+> 结论：P0 1 项、P1 15 项、P2 29 项 + 观察项 14 条（5 条经用户复核提升为 P 级，已并入 B 系列）
+
+## 零、上轮修复复核清单
+
+无上轮（首轮审计）。
+
+## 一、P0-P3 修复清单
+
+### P0（高：确定性缺陷 + 真实可达）
+
+| #    | 文件:行号                                                      | 类型              | 描述                                                                                                | 建议                                                                    | 性质 | 影响面 |
+| ---- | -------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ---- | ------ |
+| P0-1 | modules/playback/engine.py:120-167（play_next/play_prev/flip） | 13 错误策略一致性 | play() 有 is_missing 检查，但下一首/上一首/翻面三处无缺失检查——用户删除文件后按"下一首"静默卡死无声 | 三处统一：is_missing → emit ERROR(file_missing) + 日志 + 尝试跳过下一首 | 新增 | 播放   |
+
+### P1（中）
+
+| #     | 文件:行号                                                                      | 类型           | 描述                                                                                                                                         | 建议                                                                         | 影响面   |
+| ----- | ------------------------------------------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------- |
+| P1-1  | schema.py:9-13 / repository.py:8,18 / migration.py:6 / delete.py:6,14          | 10/12 可测试性 | DB_PATH 四模块各自 from...import 值绑定副本——探针覆盖不完整会静默操作真实用户库                                                              | 收敛为单一 get_db_path()/set_db_path_for_tests()                             | 跨模块   |
+| P1-2  | generator.py:33-49 + generate_check.py:13-26                                   | 1 正确性       | check_item() 零调用；generate([]) 空列表校验通过 → 生成 0 曲目空物品入库                                                                     | 入库前调 check_item；空文件列表抛 GenerateError                              | 生成     |
+| P1-3  | settings.py:62-64 + ui/effects/registry.py + ui/widgets/* + main_window.py:134 | 11+5 未接线    | 拟真度档位链路断线：add_change_listener 零注册、apply/animations_enabled/set_effects/set_animations_enabled 零调用——设置保存后无任何行为变化 | main_window 注册监听器：档位 → registry.apply + 动画开关；拟物控件接入主界面 | UI 交互  |
+| P1-4  | ui/themes.py:11-36                                                             | 5 未接线       | apply_theme(app) 正式代码零调用——全局主题从未生效                                                                                            | main.py run_gui 一行接入                                                     | 显示层   |
+| P1-5  | ui/views/library_view.py:118-123 + main_window.py:99                           | 1 正确性       | 右键菜单"编辑/重新刻录/删除"三信号零接收者——可见可点但静默无效                                                                               | main_window 接入三信号 → edit/regenerate/delete → refresh_library            | UI 交互  |
+| P1-6  | ui/widgets/deck_widget.py:53-63                                                | 1 正确性       | 停止后 set_playing(False) 只停 timer，_tonearm_pos 保持 1.0——唱针不抬起，注释失实                                                            | 停止分支补 _tonearm_pos=0.0; update()                                        | 显示层   |
+| P1-7  | ui/views/deck_view.py:78-84                                                    | 1 正确性       | 换物品时 cover 加载失败不更新 → 旧封面残留                                                                                                   | 封面无效分支 cover_label.clear()/setText                                     | 显示层   |
+| P1-8  | engine.py:35-44                                                                | 2 防御         | QMediaPlayer.errorOccurred 未连接——损坏/不支持格式播放静默无提示                                                                             | 连接 → emit ERROR(playback_error) + 日志                                     | 播放     |
+| P1-9  | ui/import_dialog.py:137-148                                                    | 2 防御         | 仅捕获 GenerateError，生成链路底层异常无兜底——槽内异常炸出                                                                                   | except Exception → QMessageBox 提示                                          | UI 交互  |
+| P1-10 | modules/generator/delete.py:23-35                                              | 2 防御         | _cover_referenced 任何异常返回 False → 误删共享封面文件                                                                                      | 异常保守返回 True（不删）或记日志跳过                                        | 数据     |
+| P1-11 | decoders/mp3.py:12、flac.py:12、wav.py:12、m4a.py:12                           | 9 性能         | 四格式 probe 全用 read_bytes()（整文件读入内存再切片）——大文件每次探测全量读盘                                                               | with open() as f: f.read(12)                                                 | 播放     |
+| P1-12 | placeholder_provider.py:9-11 + ui/effects/wear.py:10                           | 3 配置化       | base.json data_dir 键零消费——两处硬编码 "data"                                                                                               | 均改 base["data_dir"]                                                        | 配置体系 |
+| P1-13 | utils/logger.py:7-8,18                                                         | 3 配置化       | 日志目录/级别硬编码（注释自认可外置）                                                                                                        | 外置 base.json（logs_dir/log_level）                                         | 日志     |
+| P1-14 | utils/file_utils.py:7                                                          | 3 配置化       | AUDIO_EXTENSIONS 与 decoders 注册表双处维护易漂移                                                                                            | 由 decoders 注册表导出或外置配置                                             | 跨模块   |
+| P1-15 | static_config.py:25-34 + 消费点                                                | 2 防御         | _read_json 只校验顶层 dict，字段类型不校验——任一键被误写字符串/数组即 ValueError（GUI 起不来）                                               | 加载后类型校验或消费点宽容转换                                               | 配置体系 |
+
+### P2（低）
+
+| #     | 文件:行号                                                                                                | 类型               | 描述                                                                                                                                                                                                          |
+| ----- | -------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2-1  | main.py:9,15                                                                                             | 4 重复             | _STATIC_DIR 双处定义；json.loads 直读绕单例 → 版本双通道                                                                                                                                                      |
+| P2-2  | main.py/logger.py/schema.py/static_config.py                                                             | 4 重复             | 项目根派生逻辑 4 处独立实现                                                                                                                                                                                   |
+| P2-3  | 多处                                                                                                     | 5 死代码           | retry、file_utils 三函数、seconds_from_ms、to_float32、add_track_to_side、is_full、edit 四函数、regenerate、delete、ProgressWidget/RecordWidget/DeckWidget 未接入、result_item、空"视图"菜单、engine._url_cls |
+| P2-4  | convert.py:26 / static_config.py:12 / record_widget.py:106 / deck_widget.py:53                           | 6 注释失实         | 字符串数字弹性转换不符；A2.1 后可统一未做；磁带盒"封面或色块"只画色块；"唱针抬起"未实现                                                                                                                       |
+| P2-5  | utils/retry.py:26-30                                                                                     | 2 防御（实机验证） | delay<0 → sleep ValueError；times<=0、exceptions=() 未校验                                                                                                                                                    |
+| P2-6  | config/settings.py:34-54                                                                                 | 2+13               | 档位无枚举校验（非法档位静默空效果）；save_config 写失败完全静默                                                                                                                                              |
+| P2-7  | base.json:5-7 / ui.json:13                                                                               | 12 死键            | sample_rate/channels/data_dir/library_column_widths 零引用                                                                                                                                                    |
+| P2-8  | effects.json:2 + settings.py:17 + registry.py:20 / 各配置回退默认                                        | 12 漂移            | 默认档位"refined"三处维护；配置缺键回退默认值与 json 值双处维护                                                                                                                                               |
+| P2-9  | delete.py:11,6                                                                                           | 6 规范             | 函数内 import sqlite3；load_item 未使用导入                                                                                                                                                                   |
+| P2-10 | delete.py:33                                                                                             | 7 安全（需验证）   | unlink 任意 DB 路径，未校验在 COVERS_DIR 内                                                                                                                                                                   |
+| P2-11 | migration.py:33-46                                                                                       | 9 性能             | 每次连接跑 migrate（多一次 SELECT+commit）                                                                                                                                                                    |
+| P2-12 | repository.py:118-125                                                                                    | 9 冗余             | load_all 已排序，_row_to_item 内再 sorted                                                                                                                                                                     |
+| P2-13 | local_provider.py:13-18                                                                                  | 9+4+2              | 全量读内存（可 safe_copy 复用）；非原子写；扩展名不校验                                                                                                                                                       |
+| P2-14 | event_bus.py:22-28,9-12                                                                                  | 10+6               | 回调异常完全静默；subscribe 无去重（注释"幂等安全"歧义）                                                                                                                                                      |
+| P2-15 | cover/providers.py:30-47                                                                                 | 8                  | 懒装配竞态（单线程 GUI 无实际风险）                                                                                                                                                                           |
+| P2-16 | repository.py:58-60                                                                                      | 12                 | 未知 type 键 → 0 容量幽灵物品无日志                                                                                                                                                                           |
+| P2-17 | generator.py:47-48                                                                                       | 10                 | import_cover_file 失败静默无日志                                                                                                                                                                              |
+| P2-18 | queue.py:45-56                                                                                           | 1（需验证接线）    | A 空 B 有曲：boundary 错设为 B 面数 → 永不翻面                                                                                                                                                                |
+| P2-19 | edit.py:9-19                                                                                             | 13                 | 加曲不防重复 path（生成时防、编辑时不防）                                                                                                                                                                     |
+| P2-20 | engine.py:72                                                                                             | 9                  | load_item 每次全量读 user_config.json                                                                                                                                                                         |
+| P2-21 | progress.py:39-47                                                                                        | 13                 | duration 用标签值而非 player.duration()                                                                                                                                                                       |
+| P2-22 | decoders/registry.py:46-58                                                                               | 10                 | resolve None 无法区分"未注册/探测失败"                                                                                                                                                                        |
+| P2-23 | themes.py:19-32                                                                                          | 3                  | QSS 8 处颜色硬编码未进 ui.json                                                                                                                                                                                |
+| P2-24 | library_view.py:69 / shelf_view.py:92,39 / deck_view.py:39,83 / deck_widget.py:29 / import_dialog.py:100 | 3                  | 缩略图/卡片/封面/帧间隔/图片过滤串硬编码                                                                                                                                                                      |
+| P2-25 | progress_widget.py:26-34 vs deck_view.py:108-113                                                         | 4 重复             | 百分比换算双处独立实现                                                                                                                                                                                        |
+| P2-26 | wear.py:20-27                                                                                            | 9                  | 贴图缺失时每帧重复 IO（失败未缓存）                                                                                                                                                                           |
+| P2-27 | registry.py:38-40 / settings_dialog.py:26                                                                | 2                  | intensity float(None) TypeError；effects.json 空时下拉空保存 ""                                                                                                                                               |
+| P2-28 | event_bridge.py:24-36                                                                                    | 2                  | 无 **del** 兜底退订（当前正常路径已覆盖）                                                                                                                                                                     |
+| P2-29 | deck_view.py:120-130                                                                                     | 1（需验证）        | dragMoveEvent 未实现                                                                                                                                                                                          |
+
+### 观察项提升（用户复核 2026-08-14 提升为 P 级）
+
+| #   | 位置                                   | 提升为 | 描述                                                         |
+| --- | -------------------------------------- | ------ | ------------------------------------------------------------ |
+| O-1 | deck_view.py:89-94                     | P1     | 播放/暂停按按钮文本分发（脆弱）→ 改显式状态字段              |
+| O-2 | shelf_view.py:73-85                    | P1     | _empty_label deleteLater 后重建 RuntimeError（空→有→空时序） |
+| O-3 | capacity.py:15 vs side_allocator.py:17 | P1     | float 边界先减后比 vs 先加后比 → 统一比较方式                |
+| O-4 | progress.py:13                         | P2     | timer_interval_ms=1000 硬编码 → 外置配置                     |
+| O-5 | main.py:16                             | P2     | version 非字符串输出畸形 → 加类型校验                        |
+
+## 二、参考级观察项（记录不修）
+
+| 位置                                                        | 描述                           | 回落理由                                    |
+| ----------------------------------------------------------- | ------------------------------ | ------------------------------------------- |
+| engine.py:80-91                                             | ended 后重播行为依赖 Qt 运行时 | 需验证，非代码可证明                        |
+| decoders 全模块                                             | 注册表/decoder 占位零消费      | 有注释依据的预留契约（第一版 QtMultimedia） |
+| providers.py:32-33 / engine.py:35-44 / record_widget.py:135 | 函数内延迟导入                 | AGENTS.md 豁免（重依赖/循环依赖结构性）     |
+| migration.py:38-46                                          | 多步迁移非原子                 | 第一版仅单条迁移，无部分迁移风险            |
+| reader.py:83-88                                             | 三处格式清单各自维护           | 当前完全一致无失配                          |
+| main_window.py:148-152                                      | closeEvent 未停 engine         | 关窗即退进程，无泄漏                        |
+| 绘制颜色/几何参数（record/deck/wear 12 处）                 | 渐变/槽纹色硬编码              | 外观绘制细节参数豁免                        |
+| static_config.py:50-58                                      | 单例懒加载非线程安全           | 模块导入期单线程调用                        |
+| logger.py:17                                                | 外部预配 handler 场景          | 当前无调用方，纯理论                        |
+| settings_dialog.py:26-27                                    | 非法档位回退自愈               | UI 层已自愈                                 |
+
+## 三、亮点
+
+- 分层架构合规：modules 零 UI 依赖（engine 特许例外对外零 Qt 类型）；事件契约零 Qt + bridge 唯一翻译层且 shutdown 幂等
+- 容错降级链路完整：empty_record / placeholder 兜底 / 宽容解析 / 探针隔离测试库
+- TDD 全覆盖：14 个探针全量回归
+- 三路交叉验证一致：mutagen 帧 str() 行为已实测排除；read_bytes 全读语义已实测确认

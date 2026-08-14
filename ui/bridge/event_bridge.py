@@ -70,6 +70,13 @@ class EventBridge:
             unsub()
         self._unsubs.clear()
 
+    def __del__(self) -> None:
+        # 析构兜底（B3.17）：未显式 shutdown 时退订，防悬挂回调（GC 时机不定，正常路径仍走 shutdown）
+        try:
+            self.shutdown()
+        except Exception:
+            pass
+
 
 # ===== ui/bridge/event_bridge.py 类/函数说明 =====
 # _SignalCarrier(QObject): 信号载体（state_changed/track_changed/progress/side_flipped/error）

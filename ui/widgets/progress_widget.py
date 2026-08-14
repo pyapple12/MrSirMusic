@@ -1,8 +1,8 @@
-# 进度显示（A12.3）：进度条 + 时间（mm:ss），PROGRESS 事件驱动
+# 进度显示（A12.3/B1.4）：进度条 + 时间（mm:ss），PROGRESS 事件驱动，百分比走公共换算
 
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QWidget
 
-from utils.convert import format_duration
+from utils.convert import format_duration, progress_percent
 
 
 class ProgressWidget(QWidget):
@@ -24,11 +24,8 @@ class ProgressWidget(QWidget):
         return self._time.text()
 
     def on_progress(self, position_ms: int, duration_ms: int) -> None:
-        # PROGRESS 驱动：更新进度条百分比与时间文本（duration 0 时归零）
-        if duration_ms > 0:
-            self.bar.setValue(int(position_ms * 100 / duration_ms))
-        else:
-            self.bar.setValue(0)
+        # PROGRESS 驱动：更新进度条百分比（公共换算 progress_percent）与时间文本
+        self.bar.setValue(progress_percent(position_ms, duration_ms))
         self._time.setText(
             f"{format_duration(position_ms / 1000)} / {format_duration(duration_ms / 1000)}"
         )

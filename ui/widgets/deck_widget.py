@@ -26,7 +26,7 @@ class DeckWidget(QWidget):
         anim = ui.get("animation", {}) if isinstance(ui, dict) else {}
         self._spin_ms = int(anim.get("record_spin_ms", 2000))
         self._drop_ms = int(anim.get("tonearm_drop_ms", 500))
-        self._tick_ms = 30
+        self._tick_ms = int(ui.get("spin_tick_ms", 30))
         self.timer = QTimer(self)
         self.timer.setInterval(self._tick_ms)
         self.timer.timeout.connect(self._tick)
@@ -51,7 +51,7 @@ class DeckWidget(QWidget):
         return self._tonearm_pos
 
     def set_playing(self, playing: bool) -> None:
-        # 播放态切换：播放 → 定时器启动（动画关时瞬时落针不转）；停止 → 定时器停止（唱针抬起）
+        # 播放态切换：播放 → 定时器启动（动画关时瞬时落针不转）；停止 → 定时器停止 + 唱针瞬时抬起
         self._playing = playing
         if playing:
             if self._animations_enabled:
@@ -61,6 +61,8 @@ class DeckWidget(QWidget):
                 self.update()
         else:
             self.timer.stop()
+            self._tonearm_pos = 0.0
+            self.update()
 
     def _tick(self) -> None:
         # 动画帧：动画开启且播放中角度按 spin_ms 推进；唱针向目标（播放 1/停止 0）插值逼近

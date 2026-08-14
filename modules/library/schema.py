@@ -1,15 +1,13 @@
-# 物品库建表模块（A6.1）：SQLite items/tracks/schema_version 建表，外键 + 索引
+# 物品库建表模块（A6.1/B1.2）：SQLite items/tracks/schema_version 建表，外键 + 索引
 
 import sqlite3
-from pathlib import Path
 
 from config.static.static_config import get_static_config
+from utils.paths import project_root
 
 # 库文件路径（music/items.db；music_dir 来自 base.json，项目根相对）
 DB_PATH = (
-    Path(__file__).resolve().parent.parent.parent
-    / get_static_config().base.get("music_dir", "music")
-    / "items.db"
+    project_root() / get_static_config().base.get("music_dir", "music") / "items.db"
 )
 
 # 当前 schema 版本（v1 首版建库）

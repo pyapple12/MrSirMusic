@@ -35,12 +35,10 @@ class PlaybackEngine:
     def _ensure_player(self) -> Any:
         # 延迟创建 QMediaPlayer（offscreen 可无头初始化）；媒体自然结束 → 发 ended 状态事件
         if self._player is None:
-            from PySide6.QtCore import QUrl
             from PySide6.QtMultimedia import QMediaPlayer
 
             self._player = QMediaPlayer()
             self._player.mediaStatusChanged.connect(self._on_media_status)
-            self._url_cls = QUrl
         return self._player
 
     def _on_media_status(self, status: Any) -> None:
@@ -113,39 +111,52 @@ class PlaybackEngine:
             return 0
         return int(self._player.position())
 
+    def duration_ms(self) -> int:
+        # 媒体总时长（毫秒；B3.13 进度上报优先用播放器时长，未初始化返回 0）
+        if self._player is None:
+            return 0
+        return int(self._player.duration())
+
     def current_track(self) -> Track | None:
         # 当前曲目（项目模型，对外零 Qt 类型）
         return self._track
 
+    def _play_current(self, log_msg: str) -> bool:
+        # 载入并播放当前队列曲目：缺失 → ERROR(file_missing) + 日志 + 返回 False（不崩溃）
+        from PySide6.QtCore import QUrl
+
+        track = self._queue.current_track() if self._queue is not None else None
+        if track is None:
+            return False
+        if track.is_missing():
+            _logger.warning("播放失败（文件缺失）: %s", track.path)
+            emit(
+                ERROR,
+                ErrorPayload(
+                    category="file_missing",
+                    message=f"文件缺失：{track.title or track.path}",
+                ),
+            )
+            return False
+        self._track = track
+        self._ensure_player().setSource(QUrl.fromLocalFile(track.path))
+        self._ensure_player().play()
+        self._emit_track()
+        self._emit_state("playing")
+        _logger.info("%s: %s", log_msg, track.title or track.path)
+        return True
+
     def play_next(self) -> bool:
-        # 播放下一首（含翻面）：队列推进成功 → 载入 + 播放 + 发 TRACK_CHANGED；失败返回 False
+        # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False
         if self._queue is None or not self._queue.next():
             return False
-        from PySide6.QtCore import QUrl
-
-        self._track = self._queue.current_track()
-        if self._track is not None:
-            self._ensure_player().setSource(QUrl.fromLocalFile(self._track.path))
-            self._ensure_player().play()
-        self._emit_track()
-        self._emit_state("playing")
-        _logger.info("切至下一首: %s", self._track.title if self._track else "无")
-        return True
+        return self._play_current("切至下一首")
 
     def play_prev(self) -> bool:
-        # 播放上一首：队列回退 → 载入 + 播放 + 发 TRACK_CHANGED；失败返回 False
+        # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False
         if self._queue is None or not self._queue.prev():
             return False
-        from PySide6.QtCore import QUrl
-
-        self._track = self._queue.current_track()
-        if self._track is not None:
-            self._ensure_player().setSource(QUrl.fromLocalFile(self._track.path))
-            self._ensure_player().play()
-        self._emit_track()
-        self._emit_state("playing")
-        _logger.info("切回上一首: %s", self._track.title if self._track else "无")
-        return True
+        return self._play_current("切回上一首")
 
     def flip(self) -> bool:
         # 手动翻面：A 面 → 跳 B 面首播放（发 SIDE_FLIPPED）；已在 B 面/无 B 面返回 False
@@ -153,16 +164,10 @@ class PlaybackEngine:
             return False
         if self._queue.index >= self._queue.boundary:
             return False
-        from PySide6.QtCore import QUrl
-
         self._queue.index = self._queue.boundary
         self._queue.flipped = True
-        self._track = self._queue.current_track()
-        if self._track is not None:
-            self._ensure_player().setSource(QUrl.fromLocalFile(self._track.path))
-            self._ensure_player().play()
-        self._emit_track()
-        self._emit_state("playing")
+        if not self._play_current("手动翻面 → B 面"):
+            return False
         _logger.info("手动翻面 → B 面")
         return True
 

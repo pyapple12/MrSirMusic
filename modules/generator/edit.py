@@ -7,10 +7,12 @@ from modules.rules.capacity import fits
 
 
 def add_track(item: Item, side_label: str, track: Track) -> tuple[bool, str]:
-    # 加曲：实时容量校验（A5.1 fits）→ 追加 → 完整持久化；失败返回 (False, 中文原因)
+    # 加曲：重复 path 查重（全物品范围）→ 实时容量校验（A5.1 fits）→ 追加 → 完整持久化
     side = item.side_for(side_label)
     if side is None:
         return False, f"物品不存在面 {side_label}"
+    if any(t.path == track.path for t in item.all_tracks()):
+        return False, f"曲目已存在：{track.title or track.path}"
     ok, reason = fits(side, track, item.type)
     if not ok:
         return False, reason

@@ -15,7 +15,11 @@ from PySide6.QtWidgets import (
 )
 
 from modules.items.model import Item
+from config.static.static_config import get_static_config
 from ui.dnd import ITEM_MIME_TYPE, encode_item_id
+
+# 静态配置一次解包（卡片尺寸/拖拽阈值走 ui.json，B2.8）
+_SC = get_static_config()
 
 
 class DraggableCardButton(QPushButton):
@@ -36,7 +40,10 @@ class DraggableCardButton(QPushButton):
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         # 按住移动超阈值 → 启动 QDrag（mime 带物品 id）
         if self._press_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
-            if (event.position().toPoint() - self._press_pos).manhattanLength() > 8:
+            threshold = int(_SC.ui.get("drag_threshold", 8))
+            if (
+                event.position().toPoint() - self._press_pos
+            ).manhattanLength() > threshold:
                 drag = QDrag(self)
                 mime = QMimeData()
                 mime.setData(ITEM_MIME_TYPE, encode_item_id(self._item_id))
@@ -68,7 +75,6 @@ class ShelfView(QWidget):
         scroll.setWidget(self._container)
         layout = QVBoxLayout(self)
         layout.addWidget(scroll)
-        self._empty_label = QLabel("置物架空荡荡——先生成一件物品吧")
 
     def set_items(self, items: list[Item]) -> None:
         # 注入物品：按 tag 分组重建（无 Tag 归入"未分类"）
@@ -82,14 +88,16 @@ class ShelfView(QWidget):
         for item in items:
             groups[item.tag or "未分类"].append(item)
         if not groups:
-            self._shelf_layout.addWidget(self._empty_label)
+            # B3.18：空标签每次重建（不 deleteLater 复用，防空→有→空时序 RuntimeError）
+            self._shelf_layout.addWidget(QLabel("置物架空荡荡——先生成一件物品吧"))
             return
         for tag, tagged in sorted(groups.items()):
             box = QGroupBox(tag)
             row = QHBoxLayout(box)
             for item in tagged:
                 btn = DraggableCardButton(f"{item.name}\n{item.type.name}", item.id)
-                btn.setFixedSize(110, 90)
+                card_w, card_h = _SC.ui.get("card_size", [110, 90])
+                btn.setFixedSize(int(card_w), int(card_h))
                 btn.clicked.connect(
                     lambda _=False, iid=item.id: self.item_clicked.emit(iid)
                 )

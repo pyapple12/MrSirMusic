@@ -16,7 +16,11 @@ from PySide6.QtWidgets import (
 
 from modules.cover.providers import resolve_cover
 from modules.items.model import Item
+from config.static.static_config import get_static_config
 from ui.dnd import ITEM_MIME_TYPE, encode_item_id
+
+# 静态配置一次解包（缩略图尺寸走 ui.json，B2.8）
+_SC = get_static_config()
 
 
 class _ItemList(QListWidget):
@@ -65,8 +69,9 @@ class LibraryView(QWidget):
             if cover and Path(cover).is_file():
                 pixmap = QPixmap(cover)
                 if not pixmap.isNull():
+                    thumb = int(_SC.ui.get("thumbnail_size", 32))
                     entry.setIcon(
-                        pixmap.scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio)
+                        pixmap.scaled(thumb, thumb, Qt.AspectRatioMode.KeepAspectRatio)
                     )
             entry.setData(Qt.ItemDataRole.UserRole, item.id)
             self.list.addItem(entry)

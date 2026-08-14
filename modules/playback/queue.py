@@ -43,15 +43,17 @@ class PlaybackQueue:
 
 
 def build_queue(item: Item, auto_flip: bool = False) -> PlaybackQueue:
-    # 由物品构建播放队列：[SideA.tracks..., SideB.tracks...]，boundary=A 面曲目数
+    # 由物品构建播放队列：[SideA.tracks..., SideB.tracks...]，boundary=A 面曲目数（空 A 面为 0）
     tracks: list[Track] = []
     boundary = 0
+    first_side = True
     for label in item.type.sides:
         side = item.side_for(label)
         if side is None:
             continue
-        if boundary == 0:
-            boundary = len(tracks) + len(side.tracks)
+        if first_side:
+            boundary = len(side.tracks)
+            first_side = False
         tracks.extend(side.tracks)
     return PlaybackQueue(tracks=tracks, boundary=boundary, auto_flip=auto_flip)
 

@@ -104,7 +104,7 @@ class RecordWidget(QWidget):
         painter.restore()
 
     def _paint_cassette(self, painter: QPainter, rect: QRectF) -> None:
-        # 磁带盒：圆角矩形渐变壳 + 上窗口（半透明）+ 底部标签（封面或色块）
+        # 磁带盒：圆角矩形渐变壳 + 上窗口（半透明）+ 底部标签（色块占位；B3.2 注释修正）
         painter.save()
         gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         gradient.setColorAt(0.0, QColor("#4a4a55"))

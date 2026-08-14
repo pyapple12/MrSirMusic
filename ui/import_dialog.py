@@ -95,9 +95,10 @@ class ImportDialog(QDialog):
             self.files_label.setText(f"已选 {len(files)} 个文件")
 
     def _pick_cover(self) -> None:
-        # 本地封面选择（QFileDialog 单文件，图片过滤）
+        # 本地封面选择（QFileDialog 单文件，图片过滤串走 ui.json，B2.8）
+        image_filter = str(_SC.ui.get("cover_image_filter", "*.png *.jpg *.jpeg *.bmp"))
         path, _ = QFileDialog.getOpenFileName(
-            self, "选择封面图片", "", "图片文件 (*.png *.jpg *.jpeg *.bmp)"
+            self, "选择封面图片", "", f"图片文件 ({image_filter})"
         )
         if path:
             self.cover_path_edit.setText(path)
@@ -149,7 +150,7 @@ class ImportDialog(QDialog):
         self.accept()
 
     def result_item(self) -> Item | None:
-        # 生成结果（accept 后由调用方取）
+        # 生成结果（accept 后由调用方取）；预留：当前刷新走重新读库，本接口供探针/后续直接取用
         return self._result_item
 
 

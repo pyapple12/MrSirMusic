@@ -28,6 +28,14 @@ def animations_enabled(level: str) -> bool:
     return bool(rec.get("animations", False))
 
 
+def _to_float(value: Any, default: float = 0.0) -> float:
+    # 宽容数值转换（B3.16）：非数值/None 回退默认，不抛 TypeError
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def build_effects(level: str) -> list[Effect]:
     # 按档位装配效果器列表：wear → WearEffect(intensity)；weathering → WeatheringEffect(intensity)
     rec = _level_config(level)
@@ -35,9 +43,9 @@ def build_effects(level: str) -> list[Effect]:
         return []
     effects: list[Effect] = []
     if rec.get("wear"):
-        effects.append(WearEffect(float(rec.get("wear_intensity", 0.0))))
+        effects.append(WearEffect(_to_float(rec.get("wear_intensity"))))
     if rec.get("weathering"):
-        effects.append(WeatheringEffect(float(rec.get("weathering_intensity", 0.0))))
+        effects.append(WeatheringEffect(_to_float(rec.get("weathering_intensity"))))
     return effects
 
 

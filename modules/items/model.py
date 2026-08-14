@@ -59,7 +59,7 @@ class Track:
 
 @dataclass
 class Side:
-    # 物品的某一面（A/B）：label + 曲目列表，容量由调用方校验（is_full 提供边界判断）
+    # 物品的某一面（A/B）：label + 曲目列表，容量由 rules/capacity 统一校验（B3.1）
     label: str
     tracks: list[Track] = field(default_factory=list)
 
@@ -78,10 +78,6 @@ class Side:
                 del self.tracks[i]
                 return True
         return False
-
-    def is_full(self, max_seconds: int | float) -> bool:
-        # 容量边界：总时长达到或超过上限视为满（恰好满与超出一秒均 True）
-        return self.total_seconds() >= max_seconds
 
 
 @dataclass
@@ -125,7 +121,7 @@ class Item:
 #   is_missing(): Path.is_file 检测（文件被移动 → 播放时提示，不崩溃）
 # Side(dataclass): 面（label + tracks）
 #   total_seconds(): 时长聚合；add_track(): 仅追加；remove_track(track_id): 按 path 移除
-#   is_full(max_seconds): 边界判断（>= 视为满，恰好满/超出均 True）
+#   注：容量边界判断统一走 modules/rules/capacity（B3.1 已删除冗余的 is_full）
 # Item(dataclass): 物品（uuid id、sides dict、聚合方法 all_tracks/total_seconds/side_for/bump）
 #   关联配置：ItemType 由 config/static/item_types.json 装配（经 static_config）
 #   设计理由：纯数据层零依赖，持久化（A6）/规则（A5）/生成（A8）均在其上

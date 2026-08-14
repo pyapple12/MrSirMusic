@@ -1,21 +1,15 @@
-# MrSirMusic 主入口（A0.4）：argparse 分发，--version/-V 打印版本后退出，默认启动 GUI
+# MrSirMusic 主入口（A0.4/B1.1）：argparse 分发，--version/-V 打印版本后退出，默认启动 GUI
 
 import argparse
-import json
 import sys
-from pathlib import Path
 
-# 静态配置目录（__file__ 自定位，与 config/static/ 绑定）
-_STATIC_DIR = Path(__file__).resolve().parent / "config" / "static"
+from config.static.static_config import get_static_config
 
 
 def get_version() -> str:
-    # 读取 base.json 的 version 字段（版本唯一来源）；缺失/损坏回退 "unknown"，不崩溃
-    try:
-        data = json.loads((_STATIC_DIR / "base.json").read_text(encoding="utf-8"))
-        return str(data.get("version", "unknown"))
-    except Exception:
-        return "unknown"
+    # 读取 base.json 的 version 字段（版本唯一来源，经 static_config 单例单通道）；非字符串/缺失回退 "unknown"
+    value = get_static_config().base.get("version", "unknown")
+    return value if isinstance(value, str) else "unknown"
 
 
 def run_gui() -> None:
@@ -23,10 +17,12 @@ def run_gui() -> None:
     try:
         from PySide6.QtWidgets import QApplication
         from ui.main_window import MainWindow
+        from ui.themes import apply_theme
     except ImportError as exc:
         print(f"GUI 依赖未就绪：{exc}（ui 层尚未开发完成）", file=sys.stderr)
         raise SystemExit(1)
     app = QApplication([])
+    apply_theme(app)
     window = MainWindow()
     window.show()
     raise SystemExit(app.exec())

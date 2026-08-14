@@ -1,33 +1,34 @@
-# 磨损/风化效果器（A13.2）：预置贴图按强度叠加（QPainter drawImage + opacity）
+# 磨损/风化效果器（A13.2/B2.1）：预置贴图按强度叠加（QPainter drawImage + opacity）
 
 from pathlib import Path
 
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QImage, QPainter
 
-# 贴图路径（data/textures/ 随包发布；探针生成）
-WEAR_TEXTURE = (
-    Path(__file__).resolve().parent.parent.parent / "data" / "textures" / "wear.png"
+from config.static.static_config import get_static_config
+from utils.paths import project_root
+
+# 贴图路径（data/textures/ 随包发布；目录走 base.json data_dir）
+_TEXTURES_DIR = (
+    project_root() / get_static_config().base.get("data_dir", "data") / "textures"
 )
-WEATHERING_TEXTURE = (
-    Path(__file__).resolve().parent.parent.parent
-    / "data"
-    / "textures"
-    / "weathering.png"
-)
+WEAR_TEXTURE = _TEXTURES_DIR / "wear.png"
+WEATHERING_TEXTURE = _TEXTURES_DIR / "weathering.png"
 
 
 def _load_texture(path: Path) -> QImage | None:
-    # 懒加载贴图（缓存 + 缺失返回 None）
-    if not _texture_cache.get(path):
+    # 懒加载贴图（成功与失败均缓存，B3.15 防缺失时每帧重复 IO；缺失返回 None）
+    if path not in _texture_cache:
+        loaded: QImage | None = None
         if path.is_file():
             img = QImage(str(path))
             if not img.isNull():
-                _texture_cache[path] = img
+                loaded = img
+        _texture_cache[path] = loaded
     return _texture_cache.get(path)
 
 
-_texture_cache: dict[Path, QImage] = {}
+_texture_cache: dict[Path, QImage | None] = {}
 
 
 class Effect:

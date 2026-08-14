@@ -6,19 +6,43 @@ from pathlib import Path
 from modules.items.model import Item, ItemType, Side, Track
 from modules.library.migration import migrate
 from modules.library.schema import DB_PATH
+from utils.logger import get_logger
+
+# 模块日志
+_logger = get_logger("library.repository")
 
 # 载体类型配置（加载 Item 时重建 ItemType）
 from config.static.static_config import get_static_config
 
 _ITEM_TYPES_CFG = get_static_config().item_types
 
+# 测试库覆盖（B0.3 单点收敛：探针经 set_db_path_for_tests 切换，避免多模块值绑定漂移）
+_test_db_path: str | None = None
+
+# 迁移执行记录（B3.6：按库路径记录，切换路径自动重新建表迁移，避免每次连接多一次 SELECT+commit）
+_migrated_path: str | None = None
+
+
+def set_db_path_for_tests(path: str | None) -> None:
+    # 测试库路径覆盖（None 恢复默认）；单点入口，repository/migration/delete 全部经 get_db_path 取路径
+    global _test_db_path
+    _test_db_path = path
+
+
+def get_db_path() -> str:
+    # 当前库路径（测试覆盖优先，默认 schema.DB_PATH）
+    return _test_db_path or str(DB_PATH)
+
 
 def _connect() -> sqlite3.Connection:
-    # 打开物品库连接：外键开启 + Row 工厂 + 迁移确保 schema（用户库走事务写）
-    conn = sqlite3.connect(DB_PATH)
+    # 打开物品库连接：外键开启 + Row 工厂 + 迁移确保 schema（按路径缓存，B3.6）
+    global _migrated_path
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    migrate(conn)
+    if _migrated_path != get_db_path():
+        migrate(conn)
+        _migrated_path = get_db_path()
     return conn
 
 
@@ -53,11 +77,14 @@ def _item_to_rows(item: Item) -> tuple[tuple, list[tuple]]:
     return item_row, track_rows
 
 
-def _row_to_item(item_row: sqlite3.Row, track_rows: list[sqlite3.Row]) -> Item:
-    # 数据行 → Item：重建 ItemType + 按面分组组装 Side（position 排序）
-    item_type = ItemType.from_config(
-        item_row["type"], _ITEM_TYPES_CFG.get(item_row["type"], {})
-    )
+def _row_to_item(
+    item_row: sqlite3.Row, track_rows: list[sqlite3.Row], assume_sorted: bool = False
+) -> Item:
+    # 数据行 → Item：重建 ItemType（未知 type 记日志，B3.10）+ 按面分组组装 Side（B3.7 可跳过排序）
+    type_key = item_row["type"]
+    if type_key not in _ITEM_TYPES_CFG:
+        _logger.warning("未知载体类型（0 容量降级）: %s", type_key)
+    item_type = ItemType.from_config(type_key, _ITEM_TYPES_CFG.get(type_key, {}))
     item = Item(
         id=item_row["id"],
         name=item_row["name"],
@@ -71,7 +98,10 @@ def _row_to_item(item_row: sqlite3.Row, track_rows: list[sqlite3.Row]) -> Item:
     sides: dict[str, Side] = {}
     for label in item_type.sides:
         sides[label] = Side(label=label)
-    for r in sorted(track_rows, key=lambda r: r["position"]):
+    rows = (
+        track_rows if assume_sorted else sorted(track_rows, key=lambda r: r["position"])
+    )
+    for r in rows:
         side = sides.setdefault(r["side_label"], Side(label=r["side_label"]))
         side.tracks.append(
             Track(
@@ -122,7 +152,10 @@ def load_all() -> list[Item]:
         by_item: dict[str, list] = {}
         for r in track_rows:
             by_item.setdefault(r["item_id"], []).append(r)
-        return [_row_to_item(r, by_item.get(r["id"], [])) for r in item_rows]
+        return [
+            _row_to_item(r, by_item.get(r["id"], []), assume_sorted=True)
+            for r in item_rows
+        ]
     finally:
         conn.close()
 

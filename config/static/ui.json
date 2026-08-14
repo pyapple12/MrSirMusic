@@ -4,11 +4,24 @@
   "font_family": "Microsoft YaHei",
   "colors": {
     "primary": "#8B6F47",
-    "secondary": "#2C2C2C"
+    "secondary": "#2C2C2C",
+    "hover": "#9C7F55",
+    "pressed": "#6B5533",
+    "border": "#3A3A3A",
+    "background": "#232323",
+    "text": "#EAE6DF",
+    "text_on_primary": "#FFFFFF"
   },
   "animation": {
     "record_spin_ms": 2000,
     "tonearm_drop_ms": 500
   },
-  "library_column_widths": [80, 160, 80, 120]
+  "thumbnail_size": 32,
+  "card_size": [110, 90],
+  "drag_threshold": 8,
+  "record_widget_size": 200,
+  "deck_widget_size": 220,
+  "spin_tick_ms": 30,
+  "progress_interval_ms": 1000,
+  "cover_image_filter": "*.png *.jpg *.jpeg *.bmp"
 }

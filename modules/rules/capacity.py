@@ -10,12 +10,12 @@ def remaining_seconds(side: Side, item_type: ItemType) -> float:
 
 
 def fits(side: Side, track: Track, item_type: ItemType) -> tuple[bool, str]:
-    # 单曲适配校验：剩余容量够则 (True, "")；不够返回 (False, 中文原因)
-    remaining = remaining_seconds(side, item_type)
-    if track.duration_seconds > remaining:
+    # 单曲适配校验：先加后比（与 allocate/add_track_to_side 同口径，防浮点边界判定不一致）
+    max_seconds = item_type.minutes_per_side * 60
+    if side.total_seconds() + track.duration_seconds > max_seconds:
         return False, (
             f"曲目《{track.title}》时长 {format_duration(track.duration_seconds)}"
-            f"超出剩余容量 {format_duration(remaining)}"
+            f"超出剩余容量 {format_duration(max_seconds - side.total_seconds())}"
         )
     return True, ""
 

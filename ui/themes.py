@@ -9,28 +9,36 @@ _SC = get_static_config()
 
 
 def apply_theme(app: Any) -> None:
-    # 应用全局 QSS（背景/按钮/列表/分组框/状态栏样式来自 ui.json colors/font_family）
+    # 应用全局 QSS（背景/按钮/列表/分组框/状态栏样式全部来自 ui.json colors/font_family，B2.7 全外置）
     ui = _SC.ui
     colors = ui.get("colors", {}) if isinstance(ui, dict) else {}
-    primary = str(colors.get("primary", "#8B6F47"))
-    secondary = str(colors.get("secondary", "#2C2C2C"))
+    c = {
+        "primary": str(colors.get("primary", "#8B6F47")),
+        "secondary": str(colors.get("secondary", "#2C2C2C")),
+        "hover": str(colors.get("hover", "#9C7F55")),
+        "pressed": str(colors.get("pressed", "#6B5533")),
+        "border": str(colors.get("border", "#3A3A3A")),
+        "background": str(colors.get("background", "#232323")),
+        "text": str(colors.get("text", "#EAE6DF")),
+        "text_on_primary": str(colors.get("text_on_primary", "#FFFFFF")),
+    }
     font_family = str(ui.get("font_family", "Microsoft YaHei"))
     qss = f"""
-    QMainWindow, QDialog {{ background-color: {secondary}; color: #EAE6DF; }}
-    QLabel {{ color: #EAE6DF; }}
-    QPushButton {{ background-color: {primary}; color: #FFFFFF; border: 1px solid #6B5533;
+    QMainWindow, QDialog {{ background-color: {c["secondary"]}; color: {c["text"]}; }}
+    QLabel {{ color: {c["text"]}; }}
+    QPushButton {{ background-color: {c["primary"]}; color: {c["text_on_primary"]}; border: 1px solid {c["pressed"]};
         border-radius: 4px; padding: 4px 12px; }}
-    QPushButton:hover {{ background-color: #9C7F55; }}
-    QPushButton:pressed {{ background-color: #6B5533; }}
-    QListWidget {{ background-color: #232323; border: 1px solid #3A3A3A; }}
-    QGroupBox {{ border: 1px solid #3A3A3A; border-radius: 6px; margin-top: 10px;
-        color: {primary}; }}
+    QPushButton:hover {{ background-color: {c["hover"]}; }}
+    QPushButton:pressed {{ background-color: {c["pressed"]}; }}
+    QListWidget {{ background-color: {c["background"]}; border: 1px solid {c["border"]}; }}
+    QGroupBox {{ border: 1px solid {c["border"]}; border-radius: 6px; margin-top: 10px;
+        color: {c["primary"]}; }}
     QGroupBox::title {{ subcontrol-origin: margin; left: 8px; padding: 0 4px; }}
-    QStatusBar {{ background-color: #232323; color: #EAE6DF; }}
-    QMenuBar {{ background-color: #232323; color: #EAE6DF; }}
-    QMenuBar::item:selected {{ background-color: {primary}; }}
-    QSlider::groove:horizontal {{ height: 4px; background: #3A3A3A; }}
-    QSlider::handle:horizontal {{ width: 12px; background: {primary}; margin: -4px 0; }}
+    QStatusBar {{ background-color: {c["background"]}; color: {c["text"]}; }}
+    QMenuBar {{ background-color: {c["background"]}; color: {c["text"]}; }}
+    QMenuBar::item:selected {{ background-color: {c["primary"]}; }}
+    QSlider::groove:horizontal {{ height: 4px; background: {c["border"]}; }}
+    QSlider::handle:horizontal {{ width: 12px; background: {c["primary"]}; margin: -4px 0; }}
     * {{ font-family: "{font_family}"; }}
     """
     app.setStyleSheet(qss)

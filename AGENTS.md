@@ -77,6 +77,7 @@
 - 字符串引号：普通字符串用双引号；f-string 内含大量双引号时允许外层使用单引号
 - 路径处理：强制使用 `pathlib` 代替 `os.path`
 - 临时文件：所有临时生成的脚本/文件必须写入项目根目录下的 `.temp/` 文件夹（已 gitignore）
+- **文件修改必须用 edit 工具**：修改任何既有文件（.py 代码、.md 文档、json 配置等）一律使用 edit 的精确 oldString/newString 替换，禁止用 Python 脚本（python -c / .temp/impl_*.py）或 PowerShell 命令执行内容替换（易踩引号/缩进/控制字符坑）；新建 .temp 探针/verify 脚本不受限（write 创建），但后续修改仍走 edit
 - 音频数组约定：引擎统一 `(N, 2) float32 [-1, 1] @ 44100Hz`（为后续效果器预留）
 
 ## Git 注意

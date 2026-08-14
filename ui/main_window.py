@@ -7,8 +7,10 @@ from PySide6.QtWidgets import (
     QTabWidget,
     QMenuBar,
     QLabel,
+    QInputDialog,
 )
 
+from config.settings import add_change_listener, load_config
 from config.static.static_config import get_static_config
 from modules.items.model import Item
 from modules.library.path_check import mark_missing
@@ -16,6 +18,7 @@ from modules.library.repository import load_all
 from modules.playback.engine import PlaybackEngine
 from modules.playback.progress import ProgressReporter
 from ui.bridge.event_bridge import EventBridge
+from ui.effects.registry import animations_enabled, apply as apply_effects_level
 from ui.import_dialog import ImportDialog
 from ui.settings_dialog import SettingsDialog
 from ui.views.deck_view import DeckView
@@ -65,6 +68,8 @@ class MainWindow(QMainWindow):
         self._build_menu_bar()
         self._build_status_bar()
         self._wire_playback()
+        add_change_listener(self._on_settings_changed)
+        self._apply_realism(load_config().realism_level)
         self.refresh_library(load_all())
 
     def _build_menu_bar(self) -> None:
@@ -76,7 +81,6 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         exit_action = file_menu.addAction("退出")
         exit_action.triggered.connect(self.close)
-        menu_bar.addMenu("视图")
         settings_menu = menu_bar.addMenu("设置")
         settings_action = settings_menu.addAction("设置…")
         settings_action.triggered.connect(self._open_settings)
@@ -90,17 +94,61 @@ class MainWindow(QMainWindow):
         status.addPermanentWidget(self.state_label)
 
     def _wire_playback(self) -> None:
-        # 播放路由：唱机按钮 → 引擎；三视图选择/拖放 → _play_item；桥信号 → 状态栏/唱机
+        # 播放路由：唱机按钮 → 引擎；三视图选择/拖放 → _play_item；右键编辑/刻录/删除 → 业务（B0.6）
         self.deck_view.play_clicked.connect(self.engine.play)
         self.deck_view.pause_clicked.connect(self.engine.pause)
         self.deck_view.next_clicked.connect(self.engine.play_next)
         self.deck_view.prev_clicked.connect(self.engine.play_prev)
         self.deck_view.flip_clicked.connect(self.engine.flip)
         self.library_view.play_requested.connect(self._play_item)
+        self.library_view.edit_requested.connect(self._edit_item)
+        self.library_view.regenerate_requested.connect(self._regenerate_item)
+        self.library_view.delete_requested.connect(self._delete_item)
         self.shelf_view.item_clicked.connect(self._play_item)
         self.deck_view.item_dropped.connect(self._play_item)
         self.bridge.signals.state_changed.connect(self._on_state_changed)
         self.bridge.signals.error.connect(self._on_error)
+
+    def _apply_realism(self, level: str) -> None:
+        # 应用拟真度档位到唱机控件（效果器叠加 + 动画开关；B0.4 档位接线）
+        apply_effects_level(self.deck_view.record_widget, level)
+        self.deck_view.deck_widget.set_animations_enabled(animations_enabled(level))
+
+    def _on_settings_changed(self, cfg) -> None:
+        # 设置变更实时应用档位（settings 变更回调）
+        self._apply_realism(cfg.realism_level)
+
+    def _edit_item(self, item_id: str) -> None:
+        # 编辑物品（第一版：改名对话框 → rename_item → 刷新）
+        item = next((i for i in self._items if i.id == item_id), None)
+        if item is None:
+            return
+        from modules.generator.edit import rename_item
+
+        name, ok = QInputDialog.getText(self, "编辑物品", "新名称：", text=item.name)
+        if ok and name.strip():
+            rename_item(item, name.strip())
+            self.refresh_library(load_all())
+
+    def _regenerate_item(self, item_id: str) -> None:
+        # 重新刻录：复用原歌池生成新 id 物品 → 刷新
+        item = next((i for i in self._items if i.id == item_id), None)
+        if item is None:
+            return
+        from modules.generator.regenerate import regenerate
+
+        regenerate(item)
+        self.refresh_library(load_all())
+
+    def _delete_item(self, item_id: str) -> None:
+        # 删除物品（库级联 + 封面引用检查）→ 刷新
+        item = next((i for i in self._items if i.id == item_id), None)
+        if item is None:
+            return
+        from modules.generator.delete import delete
+
+        delete(item)
+        self.refresh_library(load_all())
 
     def _play_item(self, item_id: str) -> None:
         # 播放指定物品：加载到唱机视图 → 引擎 load + play（缺失曲目播放时引擎发 ERROR）

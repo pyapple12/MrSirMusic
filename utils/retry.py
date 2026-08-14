@@ -1,4 +1,5 @@
-# 泛型重试装饰器（A2.3）：指数退避，捕获指定异常，最终失败重抛原异常
+# 泛型重试装饰器（A2.3/B3.1 预留）：指数退避，捕获指定异常，最终失败重抛原异常
+# 注：当前无联网/IO 重试场景（预留），供后续网络请求/IO 失败重试使用
 
 import functools
 import time
@@ -14,6 +15,14 @@ def retry(
     exceptions: tuple[type[Exception], ...] = (Exception,),
 ) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
     # 重试装饰器工厂：指数退避（第 n 次重试前等待 delay * 2^n），捕获指定异常，耗尽后重抛
+    # 参数校验（B3.3）：times >= 1、delay >= 0、exceptions 非空，否则抛 ValueError
+    if not isinstance(times, int) or times < 1:
+        raise ValueError("times 必须为 >= 1 的整数")
+    if delay < 0:
+        raise ValueError("delay 必须 >= 0")
+    if not exceptions:
+        raise ValueError("exceptions 不能为空")
+
     def decorator(func: Callable[_P, _T]) -> Callable[_P, _T]:
         @functools.wraps(func)
         def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:

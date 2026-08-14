@@ -1,4 +1,5 @@
-# 文件工具模块（A2.2）：pathlib 封装，零业务依赖（音频判定/目录确保/安全复制/存在检查）
+# 文件工具模块（A2.2/B3.1 预留）：pathlib 封装，零业务依赖
+# 注：ensure_dir/safe_copy/file_exists 当前无生产消费（探针使用），标注预留供后续模块接入
 
 import shutil
 from pathlib import Path

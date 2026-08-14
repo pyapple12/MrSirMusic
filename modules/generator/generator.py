@@ -6,6 +6,7 @@ from modules.cover.local_provider import import_cover_file
 from modules.items.factory import create_item
 from modules.items.model import Item, ItemType, Track
 from modules.library.repository import save_item
+from modules.rules.generate_check import check_item
 from modules.rules.side_allocator import allocate
 from modules.rules.validate import SelectionIssue, validate_selection
 from modules.tagging.reader import read_tags_batch
@@ -28,8 +29,11 @@ def generate(
     cover_source: str = "placeholder",
     cover_file: str | None = None,
 ) -> Item:
-    # 主流程：标签解析 → 选歌校验（失败抛 GenerateError）→ 顺序分配 → 封面解析 → 建物品 → 入库
+    # 主流程：标签解析 → 选歌校验（失败抛 GenerateError）→ 顺序分配 → 封面解析 → 建物品 → 完整性校验 → 入库
     paths = [str(p) for p in files]
+    if not paths:
+        _logger.warning("生成失败：未选择任何音频文件")
+        raise GenerateError("未选择任何音频文件")
     tags = read_tags_batch(paths)
     tracks = [Track.from_tagging(tag, path) for path, tag in zip(paths, tags)]
     issues: list[SelectionIssue] = validate_selection(tracks, item_type)
@@ -45,7 +49,13 @@ def generate(
             side.tracks = list(side_tracks)
     item.cover_source = cover_source
     if cover_source == "local" and cover_file:
-        import_cover_file(cover_file, item)
+        if import_cover_file(cover_file, item) is None:
+            _logger.warning("封面导入失败（降级占位图）: %s", cover_file)
+    problems = check_item(item)
+    if problems:
+        detail = "；".join(problems)
+        _logger.warning("生成失败（完整性校验未通过）: %s", detail)
+        raise GenerateError(f"完整性校验未通过：{detail}")
     save_item(item)
     _logger.info(
         "生成物品成功: %s（%s，%d 首）",

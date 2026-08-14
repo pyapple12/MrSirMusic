@@ -1,23 +1,31 @@
-# 进度上报（A9.7）：1s 定时器读引擎位置发 PROGRESS；播放结束自动 next/stop
+# 进度上报（A9.7/B2.9）：定时器读引擎位置发 PROGRESS；播放结束自动 next/stop；间隔走 ui.json
 
 from typing import Any, Callable
 
+from config.static.static_config import get_static_config
 from modules.playback.engine import PlaybackEngine
 from modules.playback.event_bus import emit, subscribe
 from modules.playback.events import PLAYBACK_STATE, PROGRESS, ProgressPayload
 
+# 静态配置一次解包（进度上报间隔外置，B2.9）
+_SC = get_static_config()
+
 
 class ProgressReporter:
-    # 进度上报器：QTimer(1s) → 引擎位置 → PROGRESS；监听 ended → 自动 next/stop
+    # 进度上报器：QTimer → 引擎位置 → PROGRESS；监听 ended → 自动 next/stop
 
-    def __init__(self, engine: PlaybackEngine, timer_interval_ms: int = 1000) -> None:
-        # 初始化：创建 1s 定时器（offscreen 可无头创建）+ 订阅播放结束事件
+    def __init__(
+        self, engine: PlaybackEngine, timer_interval_ms: int | None = None
+    ) -> None:
+        # 初始化：创建定时器（间隔默认读 ui.json progress_interval_ms）+ 订阅播放结束事件
         from PySide6.QtCore import QTimer
 
         self.engine = engine
-        self.timer_interval_ms = timer_interval_ms
+        self.timer_interval_ms = int(
+            timer_interval_ms or _SC.ui.get("progress_interval_ms", 1000)
+        )
         self._timer = QTimer()
-        self._timer.setInterval(timer_interval_ms)
+        self._timer.setInterval(self.timer_interval_ms)
         self._timer.timeout.connect(self._report)
         self._unsubscribe_state = subscribe(PLAYBACK_STATE, self._on_state)
 
@@ -35,11 +43,12 @@ class ProgressReporter:
         self._unsubscribe_state()
 
     def _report(self) -> None:
-        # 读引擎位置与当前曲目时长 → 发 PROGRESS（无曲目/无时长时按 0）
-        duration_ms = 0
-        track = self.engine.current_track()
-        if track is not None:
-            duration_ms = int(track.duration_seconds * 1000)
+        # 读引擎位置与时长 → 发 PROGRESS（时长优先播放器，标签值兜底，B3.13）
+        duration_ms = self.engine.duration_ms()
+        if duration_ms <= 0:
+            track = self.engine.current_track()
+            if track is not None:
+                duration_ms = int(track.duration_seconds * 1000)
         emit(
             PROGRESS,
             ProgressPayload(
