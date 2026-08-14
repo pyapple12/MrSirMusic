@@ -452,3 +452,70 @@ Track: path / title / artist / album / duration(秒) / format
 - C 系列 17 项全部在位且零回归；三组交叉验证一致
 - C0.1 动画时序穷举（播放/暂停 × 动画开关 × 切换顺序）无冻结无泄漏
 - 版本/README/commit 三方一致（0.1.0.2，c8844d2）
+
+## 附录 A004：全量代码审计报告（第4轮，2026-08-15）
+
+> 范围：main.py + config/、modules/、ui/、utils/ 全部 .py + 5 个 json
+> 方式：三路并行（utils+config / modules / ui）逐文件全文阅读 + git show 176373c 修复 diff 核对 + 实测验证
+> 状态：✅ 已完成（E 系列修复 2026-08-15 全部落地：E0-E4 共 15 项；全量回归 26 探针 PASS + 冒烟 OK + --version 0.1.0.4）
+> 结论：P2 7 项 + P3 7 项（无 P0/P1）；D 系列修复自身引入 4 处新缺口（card_size 长度/0 值除零/按钮态暴露/错误提示覆盖）+ 3 处遗留；问题密度 45→16→7→14（修复迭代期波动）
+
+## 零、上轮修复复核清单（A003 / D 系列 12 项）
+
+| 复核项             | 现状                                                                                                                                        | 证据                        |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| D 系列 12 项在位性 | ✅ 全部在位（commit 176373c）                                                                                                               | 主会话 grep 7 项 + 各组补查 |
+| 引入回归           | ❌ 0 处（但 D 系列暴露 4 处新缺口）                                                                                                         | 各组实测                    |
+| D0.1 白名单        | ⚠️ 3 处不完整：drag_threshold 漏项（A003 点名仍未入，实测 null 崩）；card_size 过滤后长度契约破坏（实测解包崩）；animation 0 值除零（实测） | config+ui 组                |
+| D0.3 percent       | ⚠️ 说明区未同步（双界仅改代码注释）                                                                                                         | config 组                   |
+| D0.4 翻面单次      | ⚠️ 暴露 deck_view 按钮态漂移                                                                                                                | modules+ui 组               |
+| D0.5 错误同步      | ⚠️ 引入"错误提示被'已停止'覆盖"                                                                                                             | ui 组                       |
+| D1.1 migration     | ⚠️ 说明区 DB_PATH 残留（import 已清）                                                                                                       | modules 组                  |
+
+## 一、P0-P3 修复清单
+
+### P2（低-中）
+
+| #    | 文件:行号                                        | 类型        | 描述                                                                                                              | 建议                                                            | 性质              |
+| ---- | ------------------------------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------- |
+| P2-1 | static_config.py:20-28 + shelf_view.py:43        | 2 防御      | drag_threshold 仍未入 _NUMERIC_UI_KEYS（A003 点名漏项；实测 null → int(None) TypeError）                          | 加入白名单                                                      | 遗留              |
+| P2-2 | static_config.py:111-121 + shelf_view.py:99-100  | 2 防御      | card_size 元素过滤不保长度契约（部分非法→[110]、全非法→[]，消费点双变量解包 ValueError → set_items 崩）           | 过滤后长度≠2 整键移除回退默认                                   | 新增（D0.1 缺口） |
+| P2-3 | static_config.py:46-49 + deck_widget.py:27,72    | 2 防御      | animation 值域未覆盖：record_spin_ms=0 穿过校验 → _tick 除零（drop_ms 有 max(1,) 防护而 spin_ms 无）              | 嵌套数值加 >0 下界或消费端 max(1, _spin_ms)                     | 新增（D0.1 缺口） |
+| P2-4 | deck_view.py:57,83,130-133 + engine.py:185-197   | 1 正确性    | 翻面按钮态漂移（D0.4 暴露扩大）：B 面内切歌不再恢复 checked、prev 回 A 按钮仍显"B 面"、flip 单向且 B 面点击无反馈 | _on_track 按 payload.side 同步按钮态；B 面时 flip 禁用/文本区分 | 新增（D0.4 暴露） |
+| P2-5 | main_window.py:172-174/162-170 + engine.py:47-61 | 13 错误策略 | D0.5 引入：ERROR 提示被随后的 PLAYBACK_STATE(stopped) 覆盖——错误详情用户不可见（确定性复现）                      | 状态栏拆"状态+消息"两 label，或 _on_error 提示不被状态覆盖      | 新增（D0.5 引入） |
+| P2-6 | items/model.py:28                                | 2 防御      | item_types 记录内 minutes_per_side 无白名单：误写 "abc" → int() ValueError → load 崩                              | 记录内数值键校验（与 _NESTED_NUMERIC 同机制）                   | 新增（D0.1 缺口） |
+| P2-7 | static_config.py:167-170 + settings.py:70-76     | 12 配置卫生 | default_level 无"∈ levels 键"值域校验：不一致时档位失效且 save 回退链自引用写无效档位                             | 校验 default_level ∈ levels.keys()                              | 新增              |
+
+### P3（低）
+
+| #    | 文件:行号                                                 | 类型       | 描述                                                                                    |
+| ---- | --------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------- |
+| P3-1 | engine.py:193-195                                         | 1 时序     | flip() 失败（B 面首曲 missing）时 _just_flipped 悬挂                                    |
+| P3-2 | engine.py:86-97                                           | 1 状态同步 | load_item 不重置 state（load 后 play 因 missing 短路时 UI 按钮态残留）                  |
+| P3-3 | engine.py:145-168                                         | 13         | play_next/flip 到 missing 曲目 index 不回滚                                             |
+| P3-4 | migration.py:62                                           | 6          | 说明区仍写"DB_PATH（schema.py 同源）"（D1.1 未同步）                                    |
+| P3-5 | progress.py:75                                            | 6          | 说明区"后续可外置 ui.json/base.json"失实（已外置）                                      |
+| P3-6 | main_window.py:126,138,148                                | 6          | 三处函数内延迟 import generator.*（非重依赖）                                           |
+| P3-7 | static_config.py:194-202 + convert.py:34-35 + retry.py:53 | 6          | 说明区残留组：_CONTAINER_UI_KEYS 旧名/旧签名、convert 双界未同步、retry"后续可外置"失实 |
+
+## 二、参考级观察项（记录不修）
+
+| 位置                                     | 描述                                        | 回落理由                |
+| ---------------------------------------- | ------------------------------------------- | ----------------------- |
+| deck_view.py:57,83                       | 翻面按钮态（纯显示态部分）                  | 引擎状态正确            |
+| themes.py:14-24                          | colors 内部值无白名单                       | 需手写误改 + Qt 容错    |
+| record_widget.py:70-134                  | 绘制色硬编码 8 处                           | 视觉常量豁免            |
+| registry.py:57-61                        | effects.levels 内部记录未校验 dict          | isinstance 守卫兜底     |
+| settings.py:91-95 / main_window.py:71    | 监听器累积/回调重入                         | GUI 单实例              |
+| static_config.py:16                      | logging._nameToLevel 私有 API               | CPython 多年稳定        |
+| engine.py:101-107                        | play() missing 不重置 state                 | ERROR 已提示，UI 可自愈 |
+| queue.py:50-57                           | A 面 Side 缺失 boundary 误算                | 正常链路不可达          |
+| generator.py:44-49                       | 0 时长曲目不占容量                          | 宽容解析设计妥协        |
+| schema.py:9-11                           | DB_PATH import 期计算                       | 进程内一次              |
+| local_provider/mp3/delete/side_allocator | 非原子写/纯 ID3 误判/延迟 import/丢弃无提示 | 均同前轮回落理由        |
+
+## 三、亮点
+
+- D 系列核心实现正确、零回归；D0.2（log_level 值域）与 D2.1（logger 说明区）修复完整
+- 版本/README/commit 三方一致（0.1.0.3，176373c）
+- 各组实测验证充分（null/长度/0 值/小写级别均实测）

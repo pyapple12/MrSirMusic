@@ -84,11 +84,12 @@ class PlaybackEngine:
             self._just_flipped = False
 
     def load_item(self, item: Item) -> None:
-        # 载入物品：建面内播放序列（auto_flip 读用户配置）→ 载第一首（不自动播放）
+        # 载入物品：建面内播放序列（auto_flip 读用户配置）→ 载第一首（不自动播放）；状态复位（E1.2）
         from PySide6.QtCore import QUrl
 
         self._queue = build_queue(item, auto_flip=load_config().auto_flip)
         self._just_flipped = False
+        self.state = "stopped"
         player = self._ensure_player()
         first = self._queue.current_track()
         self._track = first
@@ -150,6 +151,8 @@ class PlaybackEngine:
         if track is None:
             return False
         if track.is_missing():
+            # E2.1 跳过语义：更新 _track 保持一致（队列位置与展示曲目同步），ERROR + 返回 False（不自动跳过）
+            self._track = track
             _logger.warning("播放失败（文件缺失）: %s", track.path)
             emit(
                 ERROR,
@@ -168,7 +171,7 @@ class PlaybackEngine:
         return True
 
     def play_next(self) -> bool:
-        # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False
+        # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持推进）
         if self._queue is None or not self._queue.next():
             return False
         # D0.4：进入 B 面第一首（刚翻面）时置标记，SIDE_FLIPPED 仅发一次
@@ -177,13 +180,14 @@ class PlaybackEngine:
         return self._play_current("切至下一首")
 
     def play_prev(self) -> bool:
-        # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False
+        # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持）
         if self._queue is None or not self._queue.prev():
             return False
         return self._play_current("切回上一首")
 
     def flip(self) -> bool:
         # 手动翻面：A 面 → 跳 B 面首播放（发 SIDE_FLIPPED）；已在 B 面/无 B 面返回 False
+        # 失败（B 面首缺失）→ 回滚 A 面末 + 复位翻面标记（E1.1/E2.1）
         if self._queue is None or not (self._queue.boundary < len(self._queue.tracks)):
             return False
         if self._queue.index >= self._queue.boundary:
@@ -192,6 +196,9 @@ class PlaybackEngine:
         self._queue.flipped = True
         self._just_flipped = True
         if not self._play_current("手动翻面 → B 面"):
+            self._queue.index = self._queue.boundary - 1
+            self._queue.flipped = False
+            self._just_flipped = False
             return False
         _logger.info("手动翻面 → B 面")
         return True

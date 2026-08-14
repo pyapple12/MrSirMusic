@@ -59,4 +59,4 @@ def migrate(conn: sqlite3.Connection | None = None) -> None:
 # migrate(conn|None) -> None: 逐级迁移到最新
 #   逻辑：取当前版本 → 对注册表中高于当前版本的项依次执行 → 提交
 #   异常：迁移函数失败上抛（schema 错误属开发期缺陷，快速暴露而非静默）
-#   关联配置：DB_PATH（schema.py 同源）
+#   关联配置：库路径经 repository.get_db_path 单点（C1.1/E2.2）

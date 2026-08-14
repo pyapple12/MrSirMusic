@@ -15,6 +15,9 @@ from config.static.static_config import get_static_config
 from modules.items.model import Item
 from modules.library.path_check import mark_missing
 from modules.library.repository import load_all
+from modules.generator.delete import delete as delete_item
+from modules.generator.edit import rename_item
+from modules.generator.regenerate import regenerate as regenerate_item
 from modules.playback.engine import PlaybackEngine
 from modules.playback.progress import ProgressReporter
 from ui.bridge.event_bridge import EventBridge
@@ -86,11 +89,13 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self._open_settings)
 
     def _build_status_bar(self) -> None:
-        # 状态栏：左侧版本，右侧播放状态/错误提示
+        # 状态栏（E0.5 双 label）：左侧版本，右侧消息（错误提示，不被状态覆盖）+ 播放状态
         version_label = QLabel(f"版本 {_SC.base.get('version', '')}")
+        self.message_label = QLabel("")
         self.state_label = QLabel("未播放")
         status = self.statusBar()
         status.addWidget(version_label)
+        status.addPermanentWidget(self.message_label)
         status.addPermanentWidget(self.state_label)
 
     def _wire_playback(self) -> None:
@@ -119,35 +124,29 @@ class MainWindow(QMainWindow):
         self._apply_realism(cfg.realism_level)
 
     def _edit_item(self, item_id: str) -> None:
-        # 编辑物品（第一版：改名对话框 → rename_item → 刷新）
+        # 编辑物品（第一版：改名对话框 → rename_item → 刷新；E3.1 顶层 import）
         item = next((i for i in self._items if i.id == item_id), None)
         if item is None:
             return
-        from modules.generator.edit import rename_item
-
         name, ok = QInputDialog.getText(self, "编辑物品", "新名称：", text=item.name)
         if ok and name.strip():
             rename_item(item, name.strip())
             self.refresh_library(load_all())
 
     def _regenerate_item(self, item_id: str) -> None:
-        # 重新刻录：复用原歌池生成新 id 物品 → 刷新
+        # 重新刻录：复用原歌池生成新 id 物品 → 刷新（E3.1 顶层 import）
         item = next((i for i in self._items if i.id == item_id), None)
         if item is None:
             return
-        from modules.generator.regenerate import regenerate
-
-        regenerate(item)
+        regenerate_item(item)
         self.refresh_library(load_all())
 
     def _delete_item(self, item_id: str) -> None:
-        # 删除物品（库级联 + 封面引用检查）→ 刷新
+        # 删除物品（库级联 + 封面引用检查）→ 刷新（E3.1 顶层 import）
         item = next((i for i in self._items if i.id == item_id), None)
         if item is None:
             return
-        from modules.generator.delete import delete
-
-        delete(item)
+        delete_item(item)
         self.refresh_library(load_all())
 
     def _play_item(self, item_id: str) -> None:
@@ -170,8 +169,8 @@ class MainWindow(QMainWindow):
         self.state_label.setText(labels.get(state, state))
 
     def _on_error(self, category: str, message: str) -> None:
-        # 播放错误 → 状态栏提示（文件缺失等，不崩溃）
-        self.state_label.setText(f"提示：{message}")
+        # 播放错误 → 消息 label 提示（E0.5：独立于状态 label，不被后续状态更新覆盖）
+        self.message_label.setText(f"提示：{message}")
 
     def _open_import(self) -> None:
         # 打开导入对话框：生成成功 → 刷新物品库/置物架

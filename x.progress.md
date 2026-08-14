@@ -292,3 +292,47 @@
 - [x] D4.1 全量探针回归 —— 22 探针全量 + 冒烟 + --version 0.1.0.3；验证：全 PASS（✅ 完成：24 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2）全部 PASS；冒烟 smoke OK；--version 0.1.0.3）
 - [x] D4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 D0-D2 修复后复走通过）
 - [x] D4.3 文档同步 —— 勾选附记录；z.plan 附录 A003 状态行改 ✅；base.json version → 0.1.0.3 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A003 状态行更新 + base.json/README 版本 0.1.0.3 + A1/B1 探针断言同步）
+
+## E. 第 4 轮审计修复任务清单（依据 z.plan.md 附录 A004，2026-08-15）
+
+- 约定：P 级条目含简单修复方案（`—— 做法`）与可执行验证；修复后跑全量探针回归（AGENTS.md 命令）；版本随本轮审计修复 P+1 → 0.1.0.4
+
+### E0. P0 正确性
+
+> ✅ E0.1-E0.7 全部完成（2026-08-15）：探针 .temp/probe_e0_fixes.py 七项 PASS；全量 25 探针回归 PASS；冒烟 55 模块 OK
+
+- [x] E0.1 drag_threshold 白名单补全（P2-1 遗留）—— static_config `_NUMERIC_UI_KEYS` 加入 "drag_threshold"；验证：误写 null/字符串后加载不崩断言（✅ 完成：白名单补键；null 移除断言）
+- [x] E0.2 card_size 长度契约（P2-2）—— static_config nested 过滤后校验长度==2（否则整键移除回退默认）；验证：`[110]`/`[110,90,999]`/全非法元素后消费点回退断言（✅ 完成：过滤后长度≠2 整键移除 + 告警；`[110,'x']` 移除断言）
+- [x] E0.3 animation 值域下界（P2-3）—— nested_numeric 数值校验加 >0 下界（或 deck_widget `_spin_ms` 补 `max(1, ...)` 与 `_drop_ms` 对称）；验证：record_spin_ms=0 后不除零断言（✅ 完成：白名单 >0 下界 + 消费端 max(1, int(...)) 对称保护）
+- [x] E0.4 翻面按钮态同步（P2-4）—— deck_view `_on_track` 按 payload.side 同步 flip_button 文本/checked（A 面复位 "A 面"/unchecked）；B 面时 flip 按钮禁用或文本区分；验证：B→A 切换后按钮态断言（✅ 完成：_on_track 按 side 同步（A 复位/B 禁用）+ load_item 单面禁用；B 面 disabled 断言——探针自身断言写反已修正）
+- [x] E0.5 错误提示不被覆盖（P2-5）—— main_window 状态栏拆"状态 + 消息"双 label（或 _on_error 设置消息后不被状态覆盖）；验证：模拟错误后状态栏含错误文案断言（✅ 完成：message_label 独立于 state_label；错误后状态更新不覆盖消息）
+- [x] E0.6 item_types 记录内数值校验（P2-6）—— static_config item_types 分类记录内 minutes_per_side 数值校验（非法移除记录）；验证：误写后加载/消费不崩断言（✅ 完成：_sanitize 后记录内数值校验，非法移除记录 + 告警）
+- [x] E0.7 default_level 值域校验（P2-7）—— static_config effects 分类校验 default_level ∈ levels 键（非法移除）；验证：不一致后回退断言（✅ 完成：default_level 不在 levels 键移除 + 告警）
+
+### E1. P1 去重
+
+> ✅ E1.1-E1.2 完成（2026-08-15）：探针 .temp/probe_e1e2e3.py PASS；全量 26 探针回归 PASS
+
+- [x] E1.1 flip 失败标记复位（P3-1）—— engine.flip 失败路径补 `_just_flipped = False`（_play_current 返回 False 时复位）；验证：B 面首曲 missing 后 flip 返回 False 且标记复位断言（✅ 完成：flip 失败回滚 A 面末 + flipped/_just_flipped 双复位）
+- [x] E1.2 load_item 状态复位（P3-2）—— engine.load_item 末尾补 `self.state = "stopped"`（不发事件仅字段复位）；验证：load 后 state 断言（✅ 完成：load_item 状态字段复位；playing 后 load 断言 stopped）
+
+### E2. P2 配置化
+
+> ✅ E2.1-E2.2 完成（2026-08-15）：探针 .temp/probe_e1e2e3.py PASS；全量 26 探针回归 PASS
+
+- [x] E2.1 missing 曲目 index 回滚（P3-3）—— engine.play_next/play_prev/flip 的 _play_current 失败（missing）时回滚队列 index（或记录"跳过"语义）；验证：missing 后 index 恢复断言（✅ 完成：**跳过语义**（回滚方案会卡死缺失曲目，改为 missing 时更新 _track 保持一致 + index 保持推进可跳过）；flip 失败回滚 A 面末；B0 探针兼容）
+- [x] E2.2 说明区同步组（P3-4/3-5/3-7）—— migration.py:62 说明区改 get_db_path 描述；progress.py:75 改"已外置"；static_config 说明区删 _CONTAINER_UI_KEYS 旧名/更新签名与四分类描述；convert.py:34-35 补双界；retry.py:53 删"后续可外置"句；验证：人工核对 + 源码断言（✅ 完成：5 文件说明区全部同步，源码断言通过）
+
+### E3. P3 清理
+
+> ✅ E3.1 完成（2026-08-15）：探针 .temp/probe_e1e2e3.py PASS；全量 26 探针回归 PASS
+
+- [x] E3.1 main_window 顶层 import（P3-6）—— 三处函数内延迟 import generator.edit/regenerate/delete 改顶部导入（import_dialog.py:21 已顶层导入证明无循环）；验证：冒烟 + 源码断言（✅ 完成：顶部导入 rename_item/regenerate_item/delete_item；函数体去 import）
+
+### E4. 验证与收尾
+
+> ✅ E4.1-E4.3 全部完成（2026-08-15）：全量 26 探针 PASS + 冒烟 55 模块 + --version 0.1.0.4；z.plan 附录 A004 状态行已更新；**E 系列（第 4 轮审计修复）15 项全部落地**
+
+- [x] E4.1 全量探针回归 —— 24 探针全量 + 冒烟 + --version 0.1.0.4；验证：全 PASS（✅ 完成：26 探针（A1-A14 + B0-B3 + C0-C3 + D0-D1/D2 + E0-E3）全部 PASS；冒烟 smoke OK；--version 0.1.0.4）
+- [x] E4.2 端到端复走 —— probe_a14_integration；验证：PASS（✅ 完成：probe_a14_integration PASS——端到端全链路在 E0-E3 修复后复走通过）
+- [x] E4.3 文档同步 —— 勾选附记录；z.plan 附录 A004 状态行改 ✅；base.json version → 0.1.0.4 + README 徽章同步；验证：人工审核（✅ 完成：本组勾选 + 附录 A004 状态行更新 + base.json/README 版本 0.1.0.4 + A1/B1 探针断言同步）

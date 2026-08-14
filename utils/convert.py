@@ -32,7 +32,7 @@ def to_float32(audio: Any) -> Any:
 #   逻辑：负数钳制 0 → divmod(60) → "mm:ss"（分钟自然位数，秒两位补零）
 # seconds_from_ms(ms) -> float: 毫秒 → 秒（1000 除法，保留小数）
 # progress_percent(position_ms, duration_ms) -> int: 进度百分比（0-100）
-#   逻辑：duration <= 0 返回 0；否则 int(position*100/duration)
+#   逻辑：duration <= 0 返回 0；否则 max(0, min(100, int(position*100/duration)))（E2.2 双界）
 #   设计理由：进度换算单点实现（B1.4 去重），ProgressWidget 等统一引用
 # to_float32(audio) -> Any: float32 转换占位（A9 预留）
 #   关联配置：无（44100Hz 约定见 base.json sample_rate）

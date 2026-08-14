@@ -24,7 +24,9 @@ class DeckWidget(QWidget):
         self._animations_enabled = True
         ui = _SC.ui
         anim = ui.get("animation", {}) if isinstance(ui, dict) else {}
-        self._spin_ms = int(anim.get("record_spin_ms", 2000))
+        self._spin_ms = max(
+            1, int(anim.get("record_spin_ms", 2000))
+        )  # E0.3 对称保护（防除零）
         self._drop_ms = int(anim.get("tonearm_drop_ms", 500))
         self._tick_ms = int(ui.get("spin_tick_ms", 30))
         self.timer = QTimer(self)

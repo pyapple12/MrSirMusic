@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 # 合法日志级别值域（D0.2：log_level 值域校验，小写/非法级别名导入即崩）
 _VALID_LOG_LEVELS = frozenset(logging._nameToLevel.keys())
 
-# 数值键白名单（B2.4/C0.5：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认）
+# 数值键白名单（B2.4/C0.5/E0.1：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认）
 _NUMERIC_BASE_KEYS = ("sample_rate", "channels")
 _NUMERIC_UI_KEYS = (
     "window_width",
@@ -25,6 +25,7 @@ _NUMERIC_UI_KEYS = (
     "deck_widget_size",
     "spin_tick_ms",
     "progress_interval_ms",
+    "drag_threshold",
 )
 
 # 字符串键白名单（C0.5：log_level/music_dir 等非字符串会导致导入即崩）
@@ -111,23 +112,34 @@ def _sanitize_types(
     for container, inner in (nested_numeric or {}).items():
         cv = result.get(container)
         if inner is None:
-            # list 容器：元素全数值校验（过滤非法元素）
+            # list 容器：元素数值过滤后须保持长度契约（E0.2：card_size 恒 2 元素，否则整键移除）
             if isinstance(cv, list):
-                result[container] = [
+                filtered = [
                     v
                     for v in cv
                     if v is not None and (type(v) is int or isinstance(v, float))
                 ]
+                if len(filtered) == 2:
+                    result[container] = filtered
+                else:
+                    _logger.warning(
+                        "静态配置列表键元素非法或长度不符（已移除，回退默认）: %s = %r",
+                        container,
+                        cv,
+                    )
+                    result.pop(container, None)
             continue
         if isinstance(cv, dict):
             for key in inner:
                 value = cv.get(key)
-                if value is None or (
-                    type(value) is not int and not isinstance(value, float)
+                if (
+                    value is None
+                    or (type(value) is not int and not isinstance(value, float))
+                    or value <= 0  # E0.3：时长类数值 >0 下界（防除零）
                 ):
                     if key in cv:
                         _logger.warning(
-                            "静态配置嵌套数值键类型非法（已移除，回退默认）: %s.%s = %r",
+                            "静态配置嵌套数值键类型非法或非正（已移除，回退默认）: %s.%s = %r",
                             container,
                             key,
                             value,
@@ -168,8 +180,34 @@ def _load_static_config() -> StaticConfig:
                 data = _sanitize_types(
                     data, string_keys=("default_level",), dict_keys=("levels",)
                 )
+                # E0.7：default_level 必须 ∈ levels 键（否则移除回退默认）
+                levels = data.get("levels")
+                dl = data.get("default_level")
+                if (
+                    isinstance(levels, dict)
+                    and isinstance(dl, str)
+                    and dl not in levels
+                ):
+                    _logger.warning(
+                        "default_level 不在 levels 键中（已移除，回退默认）: %s", dl
+                    )
+                    data.pop("default_level", None)
             elif key == "item_types":
                 data = _sanitize_types(data, values_must_be_dict=True)
+                # E0.6：记录内 minutes_per_side 数值非法 → 移除该记录（防消费点 int() 崩）
+                for type_key, rec in list(data.items()):
+                    if not isinstance(rec, dict):
+                        continue
+                    mp = rec.get("minutes_per_side")
+                    if mp is None or (
+                        type(mp) is not int and not isinstance(mp, float)
+                    ):
+                        _logger.warning(
+                            "载体类型记录数值非法（已移除）: %s.minutes_per_side = %r",
+                            type_key,
+                            mp,
+                        )
+                        data.pop(type_key, None)
             setattr(result, key, data)
         else:
             _logger.warning("静态配置映射缺少分类: %s", key)
@@ -189,17 +227,22 @@ def get_static_config() -> StaticConfig:
 
 # ===== config/static/static_config.py 函数/常量说明 =====
 # STATIC_DIR: 静态配置目录（__file__ 自定位；本层不依赖 utils，避免 utils/logger → config 循环，B2.2）
-# _NUMERIC_BASE_KEYS / _NUMERIC_UI_KEYS: 数值键白名单（B2.4 类型校验）
+# _NUMERIC_BASE_KEYS / _NUMERIC_UI_KEYS: 数值键白名单（B2.4 类型校验；E0.1 补 drag_threshold）
 # _STRING_BASE_KEYS / _STRING_UI_KEYS: 字符串键白名单（C0.5：log_level/music_dir 等非字符串导入即崩）
-# _CONTAINER_UI_KEYS: 容器键白名单（C0.5：animation/colors/card_size 非 dict/list 致消费点解包崩）
+# _VALID_LOG_LEVELS: 合法日志级别值域（D0.2：log_level 值域校验）
+# _NESTED_NUMERIC: 容器内部数值键白名单（D0.1/E0.2/E0.3：animation 嵌套数值 >0 下界、card_size 长度契约）
+# DEFAULT_REALISM_LEVEL: 拟真度默认档位回退字面量（C2.4 单源）
 # StaticConfig(dataclass): 静态配置聚合（base/item_types/effects/ui 四个 dict 字段，只读）
 # _read_json(rel_path) -> dict: 读单文件
 #   逻辑：json 加载 → 非 dict 或解析失败返回空 dict
 #   异常：一切异常捕获后告警返回空（不崩溃；与 AGENTS.md 宽容解析策略一致）
-# _sanitize_types(data, numeric_keys, string_keys, container_keys) -> dict: B2.4/C0.5 类型校验
-#   逻辑：三类白名单键类型非法（非 int/float、非 str、非 dict/list）→ 移除键 + 告警
+# _sanitize_types(data, numeric_keys, string_keys, dict_keys, list_keys, nested_numeric,
+#                 valid_values, values_must_be_dict) -> dict: B2.4-C0.5-D0.1-E0.x 类型校验
+#   逻辑：数值/字符串/字典/列表白名单 + 嵌套数值（>0 下界与长度契约）+ 值域 + 值全 dict 校验，
+#     非法（含 null）→ 移除键 + 告警（消费点回退默认，不崩溃）
 # _load_static_config() -> StaticConfig: 私有加载
-#   逻辑：读 config.json 映射表 → 按四分类键遍历加载 → base/ui 类型校验 → 聚合
+#   逻辑：读 config.json 映射表 → 四分类加载 → 各自类型校验（base 值域、ui 嵌套、
+#     effects default_level 值域 E0.7、item_types 记录内数值 E0.6）→ 聚合
 #   设计理由：映射表驱动（config.json 是唯一引导），键集合为契约层显式声明
 # get_static_config() -> StaticConfig: 公开单例访问（缓存懒加载，进程内只读一次）
 #   关联配置：config/static/config.json 映射表 + base/item_types/effects/ui 四 json

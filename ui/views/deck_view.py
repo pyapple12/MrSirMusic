@@ -94,6 +94,9 @@ class DeckView(QWidget):
         labels = "/".join(item.type.sides)
         self.flip_button.setText(f"{labels} 面")
         self.flip_button.setChecked(False)
+        self.flip_button.setEnabled(
+            len(item.type.sides) > 1
+        )  # E0.4：单面（CD）翻面无意义
         first = item.side_for(item.type.sides[0]) if item.type.sides else None
         if first is not None and first.tracks:
             self.track_label.setText(
@@ -116,12 +119,21 @@ class DeckView(QWidget):
         self.deck_widget.set_playing(self._playing)
 
     def _on_track(self, payload) -> None:
-        # 桥 track_changed → 曲目标签（payload.track 为项目模型或 None）
+        # 桥 track_changed → 曲目标签 + 翻面按钮态同步（E0.4：A 面复位/B 面禁用）
         track = getattr(payload, "track", None)
         if track is not None:
             self.track_label.setText(f"{track.title}\n{track.artist or '未知艺人'}")
         else:
             self.track_label.setText("未载入物品")
+        side = getattr(payload, "side", None)
+        if side == "A":
+            self.flip_button.setText("A 面")
+            self.flip_button.setChecked(False)
+            self.flip_button.setEnabled(True)
+        elif side == "B":
+            self.flip_button.setText("B 面")
+            self.flip_button.setChecked(True)
+            self.flip_button.setEnabled(False)
 
     def _on_progress(self, position_ms: int, duration_ms: int) -> None:
         # 桥 progress → ProgressWidget（百分比 + mm:ss 时间，B0.14）

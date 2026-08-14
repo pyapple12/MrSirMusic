@@ -72,4 +72,4 @@ class ProgressReporter:
 #   _report(): PROGRESS 事件（position_ms + duration_ms；duration 来自 Track.duration_seconds）
 #   _on_state(payload): ended → engine.play_next()（失败 → engine.stop()）
 #   设计理由：定时器事件循环驱动（1s 节流，非必要不频繁刷新——AGENTS.md 节流约定）
-#   关联配置：定时器间隔可调（第一版固定 1000ms，后续可外置 ui.json/base.json）
+#   关联配置：定时器间隔走 ui.json progress_interval_ms（B2.9 外置）
