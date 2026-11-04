@@ -1,5 +1,6 @@
 # project_music_player 源码深度研读报告
 
+> **文件职责**（2026-11-05 对齐 CapsulePulse 范本）：源码与参考项目研读报告——外部项目学习、参考实现、移植映射的唯一记录处（正式代码注释禁止 `.reference/` 标注，参考信息只进本文档）；只增不删，章节按研究批次追加。
 > 主题：拟物化（Skeuomorphic）+ 主题（Theme）+ 简单 + 活跃维护的开源音乐播放器
 > 研究对象：`.reference/` 下五个浅克隆仓库（webamp / audacious / RetroMusicPlayer / kelp-player / SpotAmp）
 > 研读日期：2026-08-14；所有路径均相对各自仓库根目录；行号以浅克隆 HEAD 为准

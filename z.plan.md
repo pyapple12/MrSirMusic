@@ -214,6 +214,10 @@ Track: path / title / artist / album / duration(秒) / format
 4. **置物架更换**：Shelf 实体化（容量/形态），物品库不动
 5. **独立解码进程**：decoders 注册表已预留，可演进为进程隔离（SpotAmp 管道模式）
 
+## 十、UI 壳层升级计划（2026-11-05 评审定案，附录轨道）
+
+> UI 壳层升级方案（原"第十节 PL1-PL3"展开版）已按新规范移至文末附录 PL001/PL002/PL003——方案记录方式自 2026-11-05 起对齐 CapsulePulse 附录轨道（见 AGENTS「任务清单纪律」）；评审素材 `.temp/ui_review_shots.py`（贴皮渲染 9 图，改代码后重跑即得 before/after 对比）。
+
 ## 观察项豁免定案清单（历轮汇总，2026-08-15 分级定稿）
 
 > 分级规则（参照 MrBoard 机制，2026-08-15 定稿）：历轮（A001-A005）参考级观察项经复核，按确定性分三级——
@@ -308,3 +312,54 @@ Track: path / title / artist / album / duration(秒) / format
 - **P0-P3（13 条）**：P1-1 仓库完整性——cover 模块未入库（.gitignore:52 裸 cover/ 匹配任意层级，git add -f 补入库）；P2 5——missing 分支不发 TRACK_CHANGED（UI 展示不刷新/自动翻面链中断）；flip 失败回滚不滚 _track（index 与 _track 错位）；CD 单面按钮 E0.4 自冲突（setEnabled 无条件覆盖禁用）；item_types side 字段未校验（误写 int 确定性崩）；回退链自引用两路径实测；P3 7——card_size/minutes_per_side 无 >0 下界；_just_flipped 复位不完整；edit 全删后无 check_item 可造空物品；空 A 面 side 误推导 "B"；settings 说明区缺三项；drag_threshold/spin_tick_ms 0 值无下界
 - **参考级观察项 14 条**（全部维持豁免）：message_label 无清除时机/missing_tracks 无消费方/flipped 不复位/无 shutdown/不可达分支与静默/延迟 import 与非原子写同因/单向告警与 0 时长同因
 - **亮点**：E 系列核心修复在位零崩溃级回归；版本/README/commit 三方一致（0.1.0.4）；实测充分（side=123/回退链两路径/CD 播放路径）
+
+## 附录 PL001：布局修缮与占位图重绘（2026-11-05 立项）
+
+> 状态：📌 待实施（任务组见 x.progress.md「PL001」）。**依据**：V0.1.1.0 贴皮截图评审（素材 `.temp/ui_review_shots.py`，方法 = F:\Collection taste-skill critique 十四遍观察法 + app-screens + game-ui-ux/game-feel），评审总评 ≈5.8/10，差距在壳层不在拟物控件。
+
+**定案口径**
+
+- 三大观感硬伤定案：① 占位图 = 1×1 纯红像素（#ff0000）拉伸成唱片中心标签，刺眼；② 唱机区垂直节奏崩坏（曲目标签→按钮、按钮→滑条两段 ~130-180px 偶然空洞；1440 宽按钮拉伸成巨条；900 窄窗挤压出横向滚动条）；③ QSS 覆盖不全（物品库详情区/置物架滚动区/组框白块与深色窗割裂）
+- 占位图定案：程序化生成 128×128（深胶木底 + 同心纹 + 音符刻痕），延续拟物质感，不走"找图"路线
+- 布局定案：按钮固定宽 ≤96px 居中成排（不再全宽拉伸）；滑条区最大宽 420px；垂直间距用 addSpacing 有意化（呼吸留白 ≠ 偶然空洞）
+- 置物架定案：card_size [128,128] + 封面缩略图标 + 两行文本（名称 / 形态·曲数）；组框 margins 修卡片溢出
+- 最小窗口定案：setMinimumSize(980, 640)
+- 版本定案：收口推进 `base.json` → `0.1.2`（三段式，commit 标题 V0.1.2.1 起）
+
+**明确不做**：本 PL 不改任何行为（拖放/右键/选中/播放语义零变更）；唱机形态分化 → PL002；主题色板分层 → PL003。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL001」组；评审素材重跑 `.temp/ui_review_shots.py` 即得 before/after。
+
+## 附录 PL002：唱机形态分化与库列表行重设计（2026-11-05 立项）
+
+> 状态：📌 待实施（依赖 PL001 收口；任务组见 x.progress.md「PL002」）。
+
+**定案口径**
+
+- 语义冲突定案：现版唱机区恒为黑胶转盘 + 唱针——播磁带时左侧磁带卡与右侧黑胶唱机并存、CD 也显示唱针（CD 无唱针），属拟物语义冲突，必须随 `item.type.key` 分形态
+- 三形态定案：vinyl = 现状转盘 + 唱针（拖拽寻曲仅黑胶）；cassette = 带仓壳 + 观察窗双卷轴（复用共享绘制）+ 双飞轮；cd = 银灰碟面 + OddEven 真镂空中心孔 + 封面环带 + 夹持爪（无唱针）
+- DRY 定案：卷轴绘制从 record_widget 迁出为共享 `ui/widgets/parts.py`（record_widget 与 deck_widget 共用），不复制两份
+- 交互定案：非黑胶时唱针命中测试直接失败（needle_dropped / needle_drag_started 零发射）；进度滑条 scrub 三态全类型可用
+- 库列表定案：条目文本两行化（名称主行 / 形态·Tag·时长次行），缩略图标保留
+- 版本定案：收口推进 `0.1.3`（commit 标题 V0.1.3.1 起）
+
+**明确不做**：磁带/CD 的专属音效（磁带机械声已存在、CD 数字静音为拟物正确）；3D 视图（Spun 参考结论：2D 已覆盖全部交互语义）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL002」组。
+
+## 附录 PL003：主题精修与交互补充（2026-11-05 立项）
+
+> 状态：📌 待实施（依赖 PL001 色板地基；任务组见 x.progress.md「PL003」）。
+
+**定案口径**
+
+- 方向定案：ui.json 暖棕深色主题贴皮评审成立且气质正确，**不换方向**，做"精修补全"——评审误判修正记录（原 P7"换主题"不成立）
+- 色彩分层定案：colors 增 `surface`（面板）/ `panel`（输入面）/ `muted`（弱文本）/ `disabled`（禁用面）四级，全部外置 ui.json（colors 整 dict 校验语义免白名单改动）
+- QSS 精修定案：QGroupBox / QLineEdit / QComboBox / QMenu / QToolTip / disabled 态 / 下拉列表 / indicator 全组件覆盖，取色走 themes.py c 字典
+- 对话框定案：导入按流程四分组（①音频文件 ②载体类型 ③命名与归类 ④封面来源），字段与校验零变更；设置加档位说明文案（代码内常量——UI 文案非业务参数不入 json）
+- 快捷键定案：空格 = 播放/暂停、←/→ = 上下曲、F = 翻面（WindowShortcut 级）；播放控制按钮 setFocusPolicy(NoFocus) 防聚焦按钮空格双触发；Ctrl+F 搜索第一版无搜索框不做
+- 版本定案：收口推进 `0.1.4`（commit 标题 V0.1.4.1 起）
+
+**明确不做**：深浅色双主题跟随（Windows 桌面常驻场景单一深色已够，双主题进 y.problem 备忘）；自定义皮肤体系。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL003」组；收口时真机核对三项（中文排版层级 / 高 DPI 清晰度 / 拖拽视觉反馈）交用户。

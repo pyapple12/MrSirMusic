@@ -15,6 +15,19 @@
 - `.venv` 是机器绑定的：`pyvenv.cfg` 的 `home` 指向创建时机器的 Python 路径。换机器/换用户后解释器损坏，症状是 VSCode Python 扩展报 `write EPIPE / Shutting down server`（Jedi 语言服务器无法启动）。重建：`Remove-Item -Recurse -Force .venv; py -3.14 -m venv .venv; .\.venv\Scripts\python.exe -m pip install -r requirements.txt`，然后在 VSCode 重选解释器
 - opencode 的 pylsp 配置在 `.opencode/opencode.json`，路径硬编码为项目 `.venv` 路径——换机器需同步修改
 - Qt 平台：无头验证必须 `QT_QPA_PLATFORM=offscreen`；Windows 原生运行 GUI
+- **offscreen 无中文字体**：截图探针中文字全部呈 □ 占位——文字排版类评审/核对（字体层级、行高）必须真机截图，offscreen 截图只用于布局/色彩/控件判断（2026-11-05 UI 评审实测）
+- **假音频文件无法真解码**：手写 RIFF 头的空文件会被 FFmpeg 后端拒（`errorOccurred → ERROR → stopped`）——播放链探针必须用 `wave` 模块生成真实 PCM 音频，否则播放态/唱针联动等断言连锁失真（2026-11-05 实测）
+- **QMediaPlayer 持媒体文件句柄**（Windows 文件锁）：播放/加载后立即 rename/删除音频文件会 `PermissionError`——探针先 `setSource(QUrl())` 清空源释放句柄 + rename 加重试（probe_a14 实测）
+
+## 验证与门禁（硬性工作流）
+
+> 对齐 CapsulePulse"自动格式化与静态检查"纪律：**改完必须跑，不通过不得宣称完成**；环境缺工具时先报告用户，不得静默跳过。
+
+- **编辑任何 `.py`（main/modules/ui/utils/config）后**：跑冒烟 import 命令（见"运行与验证"），全过才算完成
+- **行为改动后**：跑全量 14 探针回归（offscreen）+ 受影响模块对应探针逐项核对
+- **UI/视觉改动后**：跑 `.temp/ui_review_shots.py` 重拍截图 + 多模态读图核对（读图规则见"操作注意"）
+- **提交前全量门禁**：冒烟 import + 全量探针 + `python main.py --version` 输出与 `base.json` 一致
+- **静态检查工具现状**：Python 侧无 formatter/linter 挂载（ruff 未入 `.venv`）——引入时须先在本节登记并单独一次全量格式化提交（避免格式 diff 混入功能提交）；引入前排版以"代码约定"空格/行长条款为准
 
 ## 结构与约定
 
@@ -26,10 +39,23 @@
   - **用户配置**（`config/settings.py`，可读写）：AppConfig dataclass（拟真度档位/自动翻面），存 `config/user_config.json`
 - 三个注册表机制：载体类型（item_types.json）、解码器（`modules/playback/decoders/`，新格式=加一个模块）、封面 providers（`modules/cover/`，network 留接口未实现）
 - `music/` 是**用户核心数据目录**（非缓存）：`items.db`（物品库 SQLite）+ `covers/`（封面实体文件）；gitignore 忽略内容但保留目录（`music/*` + `!music/.gitkeep`）；删除前需确认（不同于可随手清理的缓存）
-- **参数约定**：可调参数一律走 `config/static/*.json`，禁止代码硬编码；版本号唯一来源为 `base.json` 的 `version` 字段，格式四段式 `X.Y.Z.P`：`X.Y` 版本主线（第一版 `0.1`）、`Z` 内容版本（新增内容/重构/小版本更新时 `+1`）、`P` 审计轮次（每次审计修复 `+1`）；`Z` 递增时 `P` 归零重新计数
+- **参数约定**：可调参数一律走 `config/static/*.json`，禁止代码硬编码
+- **版本双轨**（2026-11-05 采纳 CapsulePulse 范本，替代原四段 X.Y.Z.P 口径）：机器版本唯一来源 = `config/static/base.json` 的 `version` 字段（**三段式 `X.Y.Z`**：`X.Y` 版本主线，第一版 `0.1`；`Z` 内容版本，新增内容/重构/小版本更新时 `+1`）；对外正式文本**分两类**——README 徽章用三段式（值 = `base.json` 即时推进，链接指向 Releases 页），**commit 标题用四段式 `VX.Y.Z.R`**（前三段与 `base.json` 一致，第四段 R 为修订号，只随提交历史记录、不入任何配置文件；递增规则见 Commit 提交规范）。历史四段版本（V0.1.0.0–V0.1.1.0）为既有记录保留，当前机器版本 `0.1.1`
 - `main.py` 收编入口分发（argparse + GUI）；模块间顶层 import，不要使用函数内延迟 import（PySide6 等重依赖除外，可在函数内导入）
 - `.reference/` 目录是外部项目的 git clone（浅克隆），**不纳入本仓库版本控制**；需要更新时重新 clone
-- 项目规划与方案文档在 `z.plan.md`，源码研读报告在 `w.study.md`，任务清单在 `x.progress.md`
+- 项目级自建 skill 在 `.agents/skills/`（`audit-project` / `audit-report` / `plan-task` / `progress-task` / `prune-docs`；`.opencode/skills/` 为 opencode 集成的历史副本，**修订以 `.agents/` 为准**）
+- 四文件职责：方案与审计归档 `z.plan.md` / 源码研读报告 `w.study.md` / 任务清单 `x.progress.md` / 问题与远期备忘 `y.problem.md`（详见各文件头部职责块与"任务清单纪律"节）
+
+## 任务清单纪律（x.progress.md / z.plan.md，2026-11-05 切换三线编号轨道）
+
+> 对齐 CapsulePulse 范本。**历史字母系列（A–H）与审计附录 A001–A005 为既有记录全量保留、编号不改**，仅作完成勾选依据；自此之后的计划一律按三线轨道记录，不再沿用字母系列。
+
+- **编号轨道三线**：`PL{NNN}` 功能里程碑（立项方案见 z.plan.md 附录）/ `FIX{N}` 审计修复（由 audit-report 归档生成，与审计附录 `A{NNN}` **恒同号**，取号 = 下一可用 FIX 号 max+1）/ `PATCH{NNN}` 小修小改（用户日常小功能/小调整，不源自审计、不走审计轮）——方案入 z.plan.md 附录，执行条目入 x.progress.md 对应任务组，做法/验证标准三线同规
+- **条目做法必须写到文件/函数级**：`—— 做法` 部分指明改哪个文件、哪个函数/方法、新增什么、怎么改（细到可照做）；禁止一句话概括只留验证方式
+- **验证方式必须可执行、可断言**：写明探针名/断言值/截图核对点；TDD 类任务先写红灯用例再实现
+- **两区结构**：`## 已完成 ✅` 区在前、`## 未完成` 区在后；任务完成整组移入已完成区；两区内部从上到下 = 从旧到新，新组追加在区末尾；已完成组全量保留、只增不删
+- **勾选注记**：条目完成时改 `[x]`，句尾追加 `（YYYY-MM-DD 已验证：{一句话结论}）`——结论如实，不达标不降级宣布
+- 立项方案（z.plan.md 附录 PL{NNN}）的实现措施与任务条目同标准：一律拆到文件/函数级
 
 ## 工程原则（设计哲学，所有项目通用）
 
@@ -89,6 +115,17 @@
 - 路径失效：文件被移动 → Track 标记 missing，播放时提示，不崩溃
 - 只读防误写：缓存类数据库（如未来分析/统计缓存）一律只读连接（mode=ro）；用户数据库（music/items.db）走事务写
 
+### 容错登记制（2026-11-05 采纳 CapsulePulse 范本）
+
+> fail-soft 主线不变；**新增任何降级/容错点必须先在此登记**，写明场景、降级行为与理由三要素，杜绝无主静默兜底（审计维度同步检查"未登记的静默兜底"）。初始登记（存量降级点盘点）：
+
+- **标签解析失败降级空记录**（A4 存量）：场景——音频文件损坏/格式未知；降级行为——返回 `empty_record()`（title=文件名，其余空），单曲失败不影响物品生成；理由——坏文件不得拖垮整批生成（AGENTS 降级不中断条款的具体化）
+- **封面获取失败回退占位图**（A7 存量）：场景——封面文件缺失/图片损坏；降级行为——占位图 provider 兜底不显示空白；理由——缓存兜底策略
+- **静态配置坏 JSON 容错空 dict**（A1 存量）：场景——配置文件损坏/缺失；降级行为——告警 + 空分类，消费点回退默认值；理由——配置层不得阻断启动
+- **音效初始化失败整体禁用**（V0.1.1.0 H3 登记）：场景——无声卡/QtMultimedia 后端不可用；降级行为——SoundKit fail-soft 禁用并日志一次，播放主链路不受影响；理由——音效为装饰层，不得反噬业务
+- **引擎空态静默忽略**（A9 存量）：场景——未载入曲目时调用 seek/position/duration；降级行为——忽略或返回 0；理由——播放控制对空态无业务意义
+- **播放器错误降级停止态**（C0.2/D0.5 存量）：场景——解码失败/格式不支持/IO 错误；降级行为——ERROR 事件 + 状态同步 stopped，不崩溃；理由——常驻应用错误必须可提示可自愈
+
 ### 函数注释规则
 
 - 每个函数定义下方紧跟 `#` 注释，说明该函数的用途和核心逻辑（1-3 行）
@@ -124,20 +161,21 @@
 
 ## Git 注意
 
-- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md` 纳入版本控制
+- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.mimosa/`、`.zcode/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 与 `.agents/skills/` 纳入版本控制
 - 严禁将 API key、authCookie、workspaceId 等凭据提交到仓库
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 
 ### Commit 提交规范
 
-- **标题行**：`<type>: V<版本>，<摘要>`——版本号与 base.json `version` 字段一致（四段式 `X.Y.Z.P` 全写，如 `V0.1.0.1`）；摘要一句话概括核心（可用括号列重点）
+- **标题行**：`<type>: V<版本>，<摘要>`——版本为四段式 `VX.Y.Z.R`（如 `V0.1.1.1`）：前三段与 `base.json` 的 `version` 一致，第四段 R 为修订号（**只随提交历史记录、不入任何配置文件**，见"版本双轨"）；摘要一句话概括核心（可用括号列重点）
+- **版本递增**：`feat` / `fix` / `refactor` / `perf` 提交前先 bump 第四段 R（R+1）；前三段在 `base.json` 推进时 R 回到 1；`docs` / `test` / `style` / `chore` 不强制
 - **type 全集**（conventional 风格）：
   - `feat` 新功能 / `fix` 修复 / `refactor` 重构（行为不变）/ `perf` 性能
   - `docs` 文档 / `test` 测试 / `style` 格式 / `build` 构建依赖 / `ci` CI / `chore` 杂项 / `revert` 回滚
-- **正文**（改动大时可选）：`- ` 列表，按主题分组、分组下子条目缩进，每个功能块一行自然中文描述，每行 ≤ 100 字符
-- **禁止项**：内部编号（A0.1/B2.3 等任务编号）、验证/回归数字（如"全量回归 506 项通过"）、英文混排描述
+- **正文**（默认必写，仅 docs/style 微调可省）：`- ` 列表逐条"具体做了什么"，每条一个功能块、一行自然中文、≤ 100 字符；体例 = `主题：内容（细节；细节）`，同主题多细节用 `；` 分隔
+- **禁止项**：内部编号（PL001.1/FIX001.2 等任务编号）、验证/回归数字（如"全量回归 506 项通过"）、英文混排描述
 - **提交范围**：一个版本的所有连带改动一次提交（源码 + 配置 + 文档同步）
-- **流程**：由 AI 根据 `git status`/`git diff` 核对清单并草拟 commit 内容（git add 清单 + message）→ 用户审阅后自行执行 `git add`/`git commit`/`git push`（AI 不执行 git 写操作）
+- **流程**：由 AI 根据 `git status`/`git diff`（含 `--stat`）核对清单并草拟 commit 内容（git add 清单 + 标题 + 正文）→ 用户审阅后自行执行 `git add`/`git commit`/`git push`；**用户明确要求提交/推送时 AI 可按其指示执行**（执行前仍须核对改动范围）
 
 ## 操作注意
 
@@ -145,3 +183,4 @@
 - pwsh 会话带 `-NoProfile` 不加载 `$PROFILE`；**每次执行命令无条件前置**编码设置：`[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;`——不做输出内容预判，一律先设再执行，杜绝 GBK 解码乱码
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 - **多模态模型约定**：拟物 UI 的视觉核对（截图/封面/磨损效果）需要读图；当前默认模型若无视觉能力（读图工具返回 `Cannot read: this model does not support image input`），需要读图的任务（UI 截图核对、效果图分析等）**必须先通知用户切换多模态模型**再执行；**未实际读到图时严禁声称"能读到"或编造图片内容**——图读失败如实报告
+- **验证禁止更改电脑系统设置**：live 验证一律以系统当前态进行；禁止为验证去切换系统主题、缩放（DPI）、动画效果等系统设置——替代手段 = 代码走查确认规则在位 + 用户日常使用复核（2026-11-05 采纳 CapsulePulse 范本）
