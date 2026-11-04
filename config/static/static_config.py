@@ -248,6 +248,19 @@ def _load_static_config() -> StaticConfig:
                             sides,
                         )
                         data.pop(type_key, None)
+                        continue
+                    # H2：spin_ms_per_rev 可选数值键（>0 下界），非法移除键保留记录（from_config 回退默认）
+                    spin = rec.get("spin_ms_per_rev")
+                    if spin is not None and (
+                        (type(spin) is not int and not isinstance(spin, float))
+                        or spin <= 0
+                    ):
+                        _logger.warning(
+                            "载体类型记录 spin_ms_per_rev 非法（已移除键，回退默认）: %s = %r",
+                            type_key,
+                            spin,
+                        )
+                        rec.pop("spin_ms_per_rev", None)
             setattr(result, key, data)
         else:
             _logger.warning("静态配置映射缺少分类: %s", key)
@@ -282,7 +295,7 @@ def get_static_config() -> StaticConfig:
 #     非法（含 null）→ 移除键 + 告警（消费点回退默认，不崩溃）
 # _load_static_config() -> StaticConfig: 私有加载
 #   逻辑：读 config.json 映射表 → 四分类加载 → 各自类型校验（base 值域、ui 嵌套、
-#     effects default_level 值域 E0.7、item_types 记录内数值 E0.6）→ 聚合
+#     effects default_level 值域 E0.7、item_types 记录内数值 E0.6 + spin_ms_per_rev H2）→ 聚合
 #   设计理由：映射表驱动（config.json 是唯一引导），键集合为契约层显式声明
 # get_static_config() -> StaticConfig: 公开单例访问（缓存懒加载，进程内只读一次）
 #   关联配置：config/static/config.json 映射表 + base/item_types/effects/ui 四 json

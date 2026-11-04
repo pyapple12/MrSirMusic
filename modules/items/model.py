@@ -10,23 +10,31 @@ from typing import Any
 @dataclass(frozen=True)
 class ItemType:
     # 载体类型（黑胶/磁带/CD）：注册表键 + 显示名 + 面集合 + 单面容量（分钟）+ 形态
+    # spin_ms_per_rev：转盘每圈毫秒（H2 转速拟真；黑胶 1800≈33⅓rpm，缺省回退 2000）
     key: str
     name: str
     sides: tuple[str, ...]
     minutes_per_side: int
     shape: str
+    spin_ms_per_rev: int = 2000
 
     @classmethod
     def from_config(cls, key: str, data: dict[str, Any]) -> "ItemType":
         # 从 item_types.json 单条记录构造；字段宽容解析（缺省回退默认，不崩溃）
         sides_raw = data.get("side") or []
         sides = tuple(str(s) for s in sides_raw if str(s) in ("A", "B"))
+        spin_raw = data.get("spin_ms_per_rev", 2000)
+        try:
+            spin = int(spin_raw)
+        except (TypeError, ValueError):
+            spin = 2000
         return cls(
             key=key,
             name=str(data.get("name", key)),
             sides=sides or ("A",),
             minutes_per_side=int(data.get("minutes_per_side", 0)),
             shape=str(data.get("shape", "circle")),
+            spin_ms_per_rev=spin if spin > 0 else 2000,
         )
 
 

@@ -3,18 +3,21 @@
     "name": "黑胶",
     "side": ["A", "B"],
     "minutes_per_side": 22,
-    "shape": "circle"
+    "shape": "circle",
+    "spin_ms_per_rev": 1800
   },
   "cassette": {
     "name": "磁带",
     "side": ["A", "B"],
     "minutes_per_side": 30,
-    "shape": "rect"
+    "shape": "rect",
+    "spin_ms_per_rev": 2500
   },
   "cd": {
     "name": "CD",
     "side": ["A"],
     "minutes_per_side": 80,
-    "shape": "circle"
+    "shape": "circle",
+    "spin_ms_per_rev": 4000
   }
 }

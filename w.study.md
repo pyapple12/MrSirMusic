@@ -17,6 +17,7 @@
 7. [横向对比：五大关键机制](#7-横向对比五大关键机制)
 8. [编写音乐播放器的通用最佳实践](#8-编写音乐播放器的通用最佳实践)
 9. [研究索引：关键文件速查表](#9-研究索引关键文件速查表)
+10. [拟物升级参考研读（H 系列，2026-11-05）](#10-拟物升级参考研读h-系列2026-11-05)
 
 ---
 
@@ -549,6 +550,38 @@ release/                  go-librespot（17MB ELF）、spotamp 二进制、confi
 | 音频引擎           | `lib/audio_engine.cpp` |
 | FFT（半成品）      | `lib/audio_fft.cpp`    |
 | 启动守护           | `release/spotamp.sh`   |
+
+## 10. 拟物升级参考研读（H 系列，2026-11-05）
+
+> V0.1.1.0 拟物升级的三路参考来源（均已浅克隆至 `.reference/`）；本节是正式代码参考信息的唯一记录处（AGENTS.md：代码注释禁止 `.reference/` 标注）。另有 F:\Collection 技能库两份引擎无关知识（game-feel/audio-design）参与设计约束，见 10.4。
+
+### 10.1 Spun（C++20 + Qt 6.8 QML，464★，PolyForm Noncommercial——只参考设计不抄代码）
+
+| 机制 | 实现要点（文件） | 移植到本项目 |
+| ------------ | ------------------------------------------------- | -------------------------- |
+| 唱针几何 | `qml/Tonearm.qml`：枢轴 (378,100)、臂长 197、落针角 6°、扫过 20°、静息 -4°；`previewProgress=(raw-start)/range`；拖拽 = atan2 指针角增量 ±180° 解卷，Shift 0.1 精调，钳制 [-8, range+12]；命中 = 尖端 27px 圆；落针窗 [start-2, start+range+2]；按下即 pause、松手 seek+play | `ui/widgets/deck_widget.py`（H4）：枢轴 (0.88W, 0.10H)、臂长 0.78W、落针 8°/扫过 24°（按 220px 布局标定：尖端扫过 0.92R→0.53R），其余公式同源 |
+| 黑胶噪声音效 | `src/vinylnoise.cpp`（61 行）：QAudioSink 24kHz mono Int16；xorshift32 白噪声；pop 触发 `rand % (rate/5)==0`（≈5/s），幅度 0.25+0.45×\|white\|，衰减 τ=0.8ms；嘶声 = white×0.012 + 一阶低通(0.025)×0.035；40ms 淡入；总音量 ×0.35 | `.temp/make_sounds.py` 离线合成 `data/sounds/vinyl_crackle.wav`（9.6s 循环 + 0.4s 首尾交叉淡化消除接缝），运行时 `ui/sounds.py` QSoundEffect 循环播放 |
+| 转盘转速 | `qml/Main.qml:504`：33⅓→200°/s、45→270°/s、CD 慢转 9°/s；惯性 `spinSpeed += (target-spin)×min(1, dt×2.2)`；惰性动画门控 | `deck_widget.py`（H4/H2）：类型级 `spin_ms_per_rev`（vinyl 1800ms≈200°/s、cassette 2500、cd 4000），同一惯性公式 |
+| 磁带卷轴 | `qml/CassetteReels.qml` + `Main.qml:619`：带卷半径 `sqrt(1936+3993×fill)`（44²→77²），角速度 = 基准/半径因子（恒线速，卷多转慢），播放基准 10000°/s；快进 wind×850；hub 3 齿 120° 分布 | `record_widget.py`（H6）：同一半径/恒线速公式，基准降到 240°/s（卡片尺寸可视）、wind 900°/s |
+| 磁带机械声 | `src/tapesound.cpp`：0.28s 三撞击（8/61/132ms，强度 .64/.17/.43），每点 = 快攻击包络 ×(低通噪声 + 高通噪声 + 机体正弦 125/180Hz)，160ms 节流 | `.temp/make_sounds.py` 同参数合成 `tape_mech.wav`；触发在 main_window TRACK_CHANGED（H3） |
+| 专辑唱片模式 | `player.cpp` recordMap/recordTarget/playAlbumPosition：专辑=一面螺旋，落针按专辑时间轴选曲 | `engine.py seek_side`（H1）：按**当前面**时间轴定位（本项目物品有真 A/B 面语义，唱针不跨面——与 Spun 单面螺旋的模型差异） |
+
+### 10.2 Vinyl-Vue（Vue3，6★）
+
+- 唱针角 `-15°(闲置) → -5°(落针) → -5+38×总进度`，总进度 = 曲索引/曲数 + 曲内进度/曲数（`AlbumPlayer.vue:54-93`）——本项目因有面内偏移数据（H1 payload 扩展）采用了更精确的面内时间轴映射
+- 落针刮擦声：一次性音频文件播放/暂停时各播一次（`scratch.m4a`）→ 本项目用合成 `needle_drop.wav` + "非播放态→播放态"迁移沿触发（切歌不出刮擦声，翻面 SIDE_FLIPPED 额外触发）
+- 隐藏曲目列表模拟真实黑胶、点阵屏字体（文泉驿点阵宋 14px）——记录备查，本版未采用
+
+### 10.3 RecordPlayer（codrops）
+
+- 唱臂角度由圆交点几何求出（`main.js:629`），落针后 2s 延迟出声（bufferDelay）——延迟出声未采用（播放体验劣化），其余与 Spun 同质
+- 循环底噪 + UI 开关（gain 0.5）——本项目同思路，开关即拟真度档位（`effects.json ambience_intensity` 0/0.4/0.7）
+
+### 10.4 F:\Collection 知识技能应用（引擎无关）
+
+- `game-feel`：动效勿线性——转盘启停惯性缓动（dt×2.2）由此定案；反馈分层且瞬时归位——落针 = 声音 + 唱针动画 + 寻曲跳转三层反馈； juice 不进关键路径——唱针拖拽是交互不属于动画档位管辖（concise 档仍可拖拽）
+- `audio-design`：底噪（循环）与一次性音效（落针/机械声）分离；响度随档位/状态门控（playing 且黑胶且非拖拽）；fail-soft——音效任何失败不影响播放主链路
+- 其余技能（taste-skill/GSAP/Liquid Glass/kinetics/canvas-ui/motion 系列/mgaudio）均为 Web/3D 专用或引入外部依赖，对 PySide6 桌面项目不适用，已评估未采用（mgaudio 因 numpy 外部依赖弃用，改纯标准库移植合成算法）
 
 ---
 

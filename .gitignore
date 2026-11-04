@@ -238,3 +238,7 @@ config/user_config.json
 # 物品库用户核心数据（内容忽略但保留目录）
 music/*
 !music/.gitkeep
+
+# 工具产物目录（mimosa 安全扫描 / zcode 会话工件）
+.mimosa/
+.zcode/

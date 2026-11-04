@@ -114,4 +114,18 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 正确性（G0）：G0.1 0 时长曲目拦截（validate 四类检查含 duration<=0）；G0.2 生成丢弃曲目中止提示（placed 对比抛 GenerateError）；G0.3 封面导入原子写（tmp + os.replace + 异常清理）。
 配置化（G2）：G2.1 格式清单双向告警（registered 集合反向差集告警）。
 清理（G3）：G3.1 migrate 连接泄漏 finally（异常 close + 上抛）；G3.2 message_label 清除时机（\_play_item 载入前 clear）。
-验证收尾（G4）：G4.1 全量 30 探针 PASS + 冒烟 + --version 0.1.0.6；G4.2 端到端复走；G4.3 文档同步（z.plan 豁免清单"已升级转出"标注 + 版本/README/探针断言同步）。
+验证收尾（G4）：G4.1 全量 30 探针 PASS + 冒烟 + --version 0.1.0.6；G4.2 端到端复走；G4.3 文档同步（z.plan 豁免清单"已升级转出"标注 + 版本/README/探针断言同步）
+
+## 拟物升级 + 第 7 轮体检整改完成（H 系列，2026-11-05 体检 + 实施版本 V0.1.1.0）
+
+> 目标：基于三个新参考项目（.reference/Spun、Vinyl-Vue、RecordPlayer，研读记录见 w.study.md 第 10 节）做拟物交互升级，并合并第 7 轮体检结果（mimosa 深度安全扫描 0 发现 / 24 依赖包无告警；代码审查 P0×1 + P1×1 + P2×2）；全量回归 14/14
+> 体检来源：mimosa 深度扫描 + code-reviewer 聚焦审查（playback/拟物 UI/config 白名单）+ F:\Collection 知识技能（game-feel/audio-design）设计约束；结果：H0-H6 全部完成（探针 14 全量回归 PASS + 冒烟 + GUI 无头 init + 截图核对通过）
+
+体检修复（H0）：H0.1 P0 播放静音（QMediaPlayer 从未挂 QAudioOutput——Qt6 不挂输出解码推进但全程无声，6 轮审计盲区；engine._ensure_player 补挂 + 持引用防 GC）；H0.2 P2 load_item 裸赋值不发事件（播放中换物品 UI 卡"播放中"，改走 _emit_state("stopped")）；H0.3 P2 closeEvent 未停引擎（首行补 engine.stop()）；H0.4 seek 在 ended 后补发 paused（媒体拉回 LoadedMedia 但按钮态卡死）；H0.5 P1 迁移循环陷阱（循环条件固定与初始版本比较，未来注册 v2 时新库必重复 ALTER 崩溃——每次迁移后重读版本；探针 a6 补模拟用例）
+面内寻曲引擎链路（H1）：TrackChangedPayload 扩展 side_offset_seconds/side_total_seconds（可选默认 None，宽容降级）；engine._side_range/_side_durations（面内索引区间 + 时长表，全有效才启用面内映射）；engine.seek_side(fraction)（面内时间比例 → 定位曲目/曲内偏移：同曲 seek、跨曲换索引 + 挂起跳转待 LoadedMedia 应用；只在当前面内——唱针不跨面；时长缺失降级单曲内比例）
+配置扩展（H2）：item_types.json 加 spin_ms_per_rev（vinyl 1800≈33⅓rpm / cassette 2500 / cd 4000）；ItemType 加可选字段 + from_config 宽容解析（非法回退 2000）；static_config item_types 记录内可选数值键校验（非法移除键保留记录）；effects.json 三档加 ambience_intensity（0/0.4/0.7）
+音效资源与套件（H3）：.temp/make_sounds.py 纯标准库合成 data/sounds/*.wav（vinyl_crackle 9.6s 循环底噪 + 首尾交叉淡化 / needle_drop 0.3s / tape_mech 0.28s 三撞击——算法移植见 w.study 10.1）；ui/sounds.py SoundKit（QSoundEffect 封装，fail-soft 整体降级：无声卡/offscreen 自动禁用；底噪循环随播放态启停，载体门控 vinyl only；落针/机械声一次性；档位响度 ambience_intensity）；main_window 接线（set_level/set_media_kind/状态迁移沿落针音/SIDE_FLIPPED 落针音/播放中磁带换曲机械声）
+唱针真实化 + 拖拽寻曲（H4）：deck_widget 重构——枢轴/臂杆/唱头/配重真实几何（硬阴影技法），唱针角 = 落针角 + 扫过角×面内进度；mousePress/Move/Release（尖端 27px 命中 → atan2 解卷拖拽 → Shift 精调 → 钳制 → 有效窗落针发 needle_dropped / 窗外静默取消）；拖针即暂停（提针停转拟物语义）；转盘启停惯性缓动（speed += (target-speed)×min(1, dt×2.2)）；set_progress/set_spin_ms 注入；deck_view 面内比例驱动唱针
+进度滑条 scrub（H5）：progress_widget QProgressBar → QSlider（0-1000，themes QSlider QSS 现成）；scrub_started/moved/released 三态信号（scrub 中挂起 PROGRESS 回写防覆盖，松手发曲内秒数）；deck_view 换算 seek_requested；磁带 wind 视觉按拖动方向
+磁带卷轴动画（H6）：record_widget 升级——观察窗内双卷带（半径按带卷物理因子胀缩）+ 缠绕纹理 + 花键 hub 3 齿随角度旋转 + 走带路径线；恒线速模型（角速度 = 基准/半径因子，卷多转慢）；set_playing/set_animations_enabled/set_reel_progress/set_wind；定时器仅唱机实例播放中启动（置物架卡片保持静态）；scrub 方向驱动 wind 快进/倒带视觉
+验证收尾（H7）：H7.1 全量 14 探针 PASS + 冒烟 + GUI 无头 init + --version 0.1.1.0；H7.2 截图核对（唱针几何/磁带卷轴/落针到位渲染，多模态读图通过）；H7.3 探针适配与补强（a6 迁移防御、a9 音频输出/seek_side/状态同步、a11 滑条值域、a12 惯性/落针/卷轴/scrub、a13 音效资源与装配）；H7.4 文档同步（w.study 第 10 节参考研读 / README 播放与音效说明 / 版本三方一致）。

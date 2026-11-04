@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.1.0.7-blue.svg)](config/static/base.json)
+[![Version](https://img.shields.io/badge/Version-0.1.1.0-blue.svg)](config/static/base.json)
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -62,12 +62,14 @@ py -3.14 -m venv .venv
 ### 播放
 
 - 双击置物架卡片 / 物品库右键"播放" / 拖动物品卡片到唱机区域
-- 唱机提供播放/暂停、上下曲、翻面按钮与进度条
+- 唱机提供播放/暂停、上下曲、翻面按钮与进度滑条（可直接拖动寻曲）
+- **拖拽唱针寻曲**：抓住唱机右侧唱针尖端拖到任意位置松手，即按面内比例跳转（跨曲自动换曲；按住 Shift 可精调）
 - 面内播放结束自动切下一首（A 面末自动翻面取决于"自动翻面"设置）
+- 拟真音效（随档位）：黑胶播放时有爆裂/嘶声底噪与落针刮擦声、翻面落针声；磁带换曲有机械咔哒声；简洁档静音
 
 ### 设置（拟真度）
 
-菜单 **设置 → 设置…**：拟真度档位（简洁/精致/真实——磨损贴图与转盘动画强度）与自动翻面，保存后重启保持。
+菜单 **设置 → 设置…**：拟真度档位（简洁/精致/真实——磨损贴图、转盘动画与拟真音效强度）与自动翻面，保存后重启保持。
 
 ## 项目结构
 

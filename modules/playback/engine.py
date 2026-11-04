@@ -28,18 +28,25 @@ class PlaybackEngine:
     def __init__(self) -> None:
         # 初始化：播放器延迟创建；队列/当前曲目/状态初始为空
         self._player: Any | None = None
+        self._audio_output: Any | None = None
         self._queue: PlaybackQueue | None = None
         self._track: Track | None = None
         self.state: str = "stopped"
         # 刚翻面标记（D0.4：SIDE_FLIPPED 仅在翻面瞬间发射一次，B 面内切换不发）
         self._just_flipped = False
+        # 挂起跳转秒数（H1：setSource 后媒体未就绪时 setPosition 会被忽略，待 LoadedMedia 补应用）
+        self._pending_seek: float | None = None
 
     def _ensure_player(self) -> Any:
         # 延迟创建 QMediaPlayer（offscreen 可无头初始化）；媒体自然结束 → ended；播放错误 → ERROR
         if self._player is None:
-            from PySide6.QtMultimedia import QMediaPlayer
+            from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 
             self._player = QMediaPlayer()
+            # H0.1 体检修复（P0）：Qt6 必须显式挂载 QAudioOutput，否则解码推进但全程静音；
+            # 输出对象持引用防 GC 回收
+            self._audio_output = QAudioOutput()
+            self._player.setAudioOutput(self._audio_output)
             self._player.mediaStatusChanged.connect(self._on_media_status)
             self._player.errorOccurred.connect(self._on_player_error)
         return self._player
@@ -61,21 +68,53 @@ class PlaybackEngine:
             self._emit_state("stopped")
 
     def _on_media_status(self, status: Any) -> None:
-        # 媒体状态回调：自然结束（EndOfMedia）→ 发 PLAYBACK_STATE(ended)（由 progress 决定 next/stop）
+        # 媒体状态回调：自然结束（EndOfMedia）→ 发 PLAYBACK_STATE(ended)（由 progress 决定 next/stop）；
+        # LoadedMedia → 应用挂起跳转（H1：跨曲面内寻曲时源刚切换，此刻 setPosition 才生效）
         from PySide6.QtMultimedia import QMediaPlayer
 
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             self.state = "ended"
             emit(PLAYBACK_STATE, PlaybackStatePayload(state="ended"))
+        elif status == QMediaPlayer.MediaStatus.LoadedMedia:
+            if self._pending_seek is not None:
+                seconds = self._pending_seek
+                self._pending_seek = None
+                self._player.setPosition(int(seconds * 1000))
 
     def _emit_state(self, state: str) -> None:
         # 发播放状态事件（playing/paused/stopped）
         self.state = state
         emit(PLAYBACK_STATE, PlaybackStatePayload(state=state))
 
+    def _side_range(self) -> tuple[int, int]:
+        # 当前所在面的队列索引区间 [start, end)：boundary>0 按 A/B 分段；
+        # boundary=0（空 A 面）整队列视作 A 面（与 _emit_track 的 F3.1 推导同源）
+        if self._queue is None or not self._queue.tracks:
+            return (0, 0)
+        boundary = self._queue.boundary
+        if boundary > 0:
+            if self._queue.index >= boundary:
+                return (boundary, len(self._queue.tracks))
+            return (0, boundary)
+        return (0, len(self._queue.tracks))
+
+    def _side_durations(self, start: int, end: int) -> list[float] | None:
+        # 面内曲目时长列表（秒）：全部有效（>0）才返回，任一缺失/非正返回 None（宽容降级）
+        tracks = self._queue.tracks[start:end]
+        durations: list[float] = []
+        for track in tracks:
+            raw = getattr(track, "duration_seconds", None)
+            if not isinstance(raw, (int, float)) or isinstance(raw, bool) or raw <= 0:
+                return None
+            durations.append(float(raw))
+        return durations if tracks else None
+
     def _emit_track(self) -> None:
-        # 发曲目切换事件（当前曲目 + 所在面；翻面瞬间附带一次 SIDE_FLIPPED，D0.4）
+        # 发曲目切换事件（当前曲目 + 所在面；翻面瞬间附带一次 SIDE_FLIPPED，D0.4）；
+        # H1 附带面内偏移/面总时长（唱针面内映射；时长缺失时为 None 由 UI 降级）
         side = None
+        offset = None
+        total = None
         if self._queue is not None:
             # F3.1：boundary=0（空 A 面）时推导为 A（index>=0 恒真不误判 B）
             side = (
@@ -84,7 +123,20 @@ class PlaybackEngine:
                 and self._queue.index >= self._queue.boundary
                 else "A"
             )
-        emit(TRACK_CHANGED, TrackChangedPayload(track=self._track, side=side))
+            start, end = self._side_range()
+            durations = self._side_durations(start, end)
+            if durations is not None:
+                total = sum(durations)
+                offset = sum(durations[: self._queue.index - start])
+        emit(
+            TRACK_CHANGED,
+            TrackChangedPayload(
+                track=self._track,
+                side=side,
+                side_offset_seconds=offset,
+                side_total_seconds=total,
+            ),
+        )
         if self._just_flipped and side == "B":
             emit(SIDE_FLIPPED, SideFlippedPayload(side="B"))
             self._just_flipped = False
@@ -95,7 +147,10 @@ class PlaybackEngine:
 
         self._queue = build_queue(item, auto_flip=load_config().auto_flip)
         self._just_flipped = False
-        self.state = "stopped"
+        # H0.3 体检修复（P2）：复位改走事件——播放中载入首曲缺失的新物品时，
+        # 裸赋值不发事件会导致 UI 停留在"播放中"（转盘照转/按钮显示暂停）而实际无声
+        self._pending_seek = None
+        self._emit_state("stopped")
         player = self._ensure_player()
         first = self._queue.current_track()
         self._track = first
@@ -129,9 +184,51 @@ class PlaybackEngine:
         self._emit_state("stopped")
 
     def seek(self, seconds: float) -> None:
-        # 跳转（毫秒换算；未初始化播放器忽略）
+        # 跳转（毫秒换算；未初始化播放器忽略）；ended 后 seek 会把媒体拉回 LoadedMedia，
+        # 补发 paused 刷新按钮态（H0.4：否则 UI 卡在"播放结束"态无法继续）
         if self._player is not None:
             self._player.setPosition(int(seconds * 1000))
+            if self.state == "ended":
+                self._emit_state("paused")
+
+    def seek_side(self, fraction: float) -> bool:
+        # 面内寻曲（H1）：fraction ∈ [0,1] 为当前面内时间比例 → 定位目标曲目与曲内偏移；
+        # 同曲直接 seek；跨曲更新队列索引 + 载入播放（挂起跳转待 LoadedMedia 应用）。
+        # 仅在当前面内定位（拟物语义：唱针不跨面）；面时长缺失时降级为当前曲目内比例跳转
+        if self._queue is None or not self._queue.tracks:
+            return False
+        clamped = min(1.0, max(0.0, float(fraction)))
+        start, end = self._side_range()
+        durations = self._side_durations(start, end)
+        if durations is None:
+            track = self._queue.current_track()
+            if track is None:
+                return False
+            fallback = float(getattr(track, "duration_seconds", 0) or 0)
+            self.seek(clamped * fallback)
+            return True
+        total = sum(durations)
+        value = clamped * total
+        # 累计时长定位目标曲目（末曲吸收浮点余量，防 fraction→1.0 越界）
+        offset = 0.0
+        target = start
+        acc = 0.0
+        for i, duration in enumerate(durations):
+            target = start + i
+            offset = value - acc
+            if value < acc + duration:
+                break
+            acc += duration
+        offset = min(max(0.0, offset), durations[target - start])
+        if target == self._queue.index:
+            self.seek(offset)
+            return True
+        self._queue.index = target
+        self._pending_seek = offset
+        ok = self._play_current("面内寻曲跳转")
+        if not ok:
+            self._pending_seek = None
+        return ok
 
     def position_ms(self) -> int:
         # 当前播放位置（毫秒；未初始化返回 0）
@@ -219,11 +316,19 @@ class PlaybackEngine:
 
 # ===== modules/playback/engine.py 类/函数说明 =====
 # PlaybackEngine: 播放引擎（内部 QMediaPlayer 延迟导入，对外仅项目模型/事件）
-#   load_item(item): 建队列（auto_flip 读 settings）→ 载第一首 → 发 TRACK_CHANGED
-#   play/pause/stop/seek/position_ms: 播放控制（state 变化发 PLAYBACK_STATE）
+#   load_item(item): 建队列（auto_flip 读 settings）→ 载第一首 → 发 TRACK_CHANGED；
+#     复位走 _emit_state("stopped")（H0.3）+ 清挂起跳转
+#   play/pause/stop/seek/position_ms: 播放控制（state 变化发 PLAYBACK_STATE）；
+#     seek 在 ended 后补发 paused（H0.4）
+#   seek_side(fraction): 面内寻曲（H1）——面内时间比例 → 定位曲目/曲内偏移；
+#     同曲 seek、跨曲换索引挂起跳转；面时长缺失降级单曲内比例；只在当前面内（唱针不跨面）
 #   current_track(): 当前曲目（Track | None）
 #   play_next(): 队列推进（含翻面 SIDE_FLIPPED）→ 载入播放 → 发事件；无下一首 False
-#   _on_media_status: 自然结束 → PLAYBACK_STATE(ended)（progress 监听后决定 next/stop）
-#   _emit_track: TRACK_CHANGED + 翻面时 SIDE_FLIPPED（side 由队列 flipped/boundary 推导）
+#   _ensure_player: 延迟创建 QMediaPlayer + QAudioOutput（H0.1：不挂输出全程静音）
+#   _on_media_status: 自然结束 → PLAYBACK_STATE(ended)（progress 监听后决定 next/stop）；
+#     LoadedMedia → 应用挂起跳转 _pending_seek（H1 跨曲寻曲）
+#   _side_range/_side_durations: 当前面索引区间 + 面内时长表（H1；缺失宽容降级 None）
+#   _emit_track: TRACK_CHANGED + 翻面时 SIDE_FLIPPED（side 由队列 flipped/boundary 推导）；
+#     附带 side_offset_seconds/side_total_seconds（H1 唱针面内映射数据）
 #   设计理由：modules 层特许例外——内部可用 QtMultimedia，对外零 Qt 类型（A9.3 定案）
 #   关联配置：auto_flip 来自 config/settings.py 用户配置；队列逻辑见 queue.py

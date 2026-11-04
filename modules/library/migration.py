@@ -45,6 +45,10 @@ def migrate(conn: sqlite3.Connection | None = None) -> None:
         for version in sorted(MIGRATIONS):
             if version > current:
                 MIGRATIONS[version](conn)
+                # H0.5 体检修复（P1）：每次迁移后重读版本——新库经 v1 建成的就是最新 schema
+                # （create_schema 直接写最新版本号），重读可避免继续执行更高版本迁移
+                # （未来注册 v2 时旧逻辑会对新库重复 ALTER 而 duplicate column 崩溃）
+                current = get_schema_version(conn)
         conn.commit()
     finally:
         if own_conn:
