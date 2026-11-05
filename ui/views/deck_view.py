@@ -64,6 +64,14 @@ class DeckView(QWidget):
         self.next_button = QPushButton("下一首")
         self.flip_button = QPushButton("A 面")
         self.flip_button.setCheckable(True)
+        # PL003.5：播放控制按钮不参与焦点链（空格快捷键不会落在聚焦按钮上双触发）
+        for button in (
+            self.play_button,
+            self.prev_button,
+            self.next_button,
+            self.flip_button,
+        ):
+            button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self.progress_widget = ProgressWidget()
         self.progress_bar = self.progress_widget.bar  # 兼容别名（进度条实例）

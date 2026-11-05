@@ -349,7 +349,7 @@ Track: path / title / artist / album / duration(秒) / format
 
 ## 附录 PL003：主题精修与交互补充（2026-11-05 立项）
 
-> 状态：📌 待实施（依赖 PL001 色板地基；任务组见 x.progress.md「PL003」）。
+> 状态：✅ 已完成（2026-11-05 收口，全量 14 探针 PASS + 全套截图终审读图通过；任务组见 x.progress.md「PL003」）。
 
 **定案口径**
 

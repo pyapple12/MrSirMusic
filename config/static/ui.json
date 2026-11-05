@@ -12,7 +12,9 @@
     "text": "#EAE6DF",
     "text_on_primary": "#FFFFFF",
     "surface": "#35302A",
-    "panel": "#3A342C"
+    "panel": "#3A342C",
+    "muted": "#9A938A",
+    "disabled": "#45403A"
   },
   "animation": {
     "record_spin_ms": 2000,

@@ -1,5 +1,7 @@
 # 主窗口（A11.2/A14.1）：三视图容器 + 菜单栏 + 状态栏；播放路由/导入/启动加载（A14 集成）
 
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QMainWindow,
     QSplitter,
@@ -124,6 +126,27 @@ class MainWindow(QMainWindow):
         self.bridge.signals.track_changed.connect(self._on_track_changed)
         self.bridge.signals.side_flipped.connect(self._on_side_flipped)
         self.bridge.signals.error.connect(self._on_error)
+        self._wire_shortcuts()
+
+    def _wire_shortcuts(self) -> None:
+        # 桌面快捷键（PL003.5）：空格=播放/暂停、←/→=上下曲、F=翻面（窗口级）；
+        # 播放控制按钮已在 deck_view 设 NoFocus——防空格落在聚焦按钮上双触发
+        specs = (
+            (Qt.Key.Key_Space, self._on_shortcut_play_pause),
+            (Qt.Key.Key_Left, self.engine.play_prev),
+            (Qt.Key.Key_Right, self.engine.play_next),
+            (Qt.Key.Key_F, self.engine.flip),
+        )
+        self._shortcuts = []
+        for key, slot in specs:
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.activated.connect(slot)
+            self._shortcuts.append(shortcut)
+
+    def _on_shortcut_play_pause(self) -> None:
+        # 空格：按唱机视图当前态分发（与播放按钮同路由语义，B0.11 状态字段分发）
+        self.deck_view._on_play_clicked()
 
     def _apply_realism(self, level: str) -> None:
         # 应用拟真度档位到唱机控件（效果器叠加 + 动画开关；B0.4 档位接线）+ 音效响度（H3）

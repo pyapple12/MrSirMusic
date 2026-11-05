@@ -159,15 +159,17 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL002.5 deck_view 接线与库列表行 —— `deck_view.load_item` 取 resolve_cover pixmap 注入 `set_item_type(item.type.key, cover)`；`library_view.set_items` 文本两行化 `名称\n形态·Tag·时长`（format_duration）；验证：a11 回归过（详情断言不受影响）+ 三形态截图读图（2026-11-05 已验证）
 - [x] PL002.6 PL002 收口 —— `base.json` → 0.1.2（与 PL001 合并为一个内容版本提交）、README 徽章 + 播放段补形态说明、a1 断言同步；全量 14 探针 PASS + 冒烟 + --version 0.1.2 + 三形态截图终审（读图）；草拟 commit 交用户（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.2）
 
+### PL003: 主题精修与交互补充 [z.plan#附录 PL003] ✅
+
+> 结果：色板四级分层（surface/panel/muted/disabled）+ QSS 全容器覆盖精修（禁用态/工具提示/勾选件 indicator）+ 导入对话框四分组 + 设置对话框说明文案与即时回显 + 桌面快捷键三项（空格/←→/F）；全量 14 探针 PASS。
+
+- [x] PL003.1 色板分层扩展 —— `config/static/ui.json` colors 增 `muted`（#9A938A 弱文本）/ `disabled`（#45403A 禁用面）两键（surface/panel 已随 PL001 入位）；验证：贴皮截图读图定色（2026-11-05 已验证：对话框禁用浏览按钮/弱文本呈分层灰暖调）
+- [x] PL003.2 QSS 精修 —— `ui/themes.py` 补 QPushButton:disabled（disabled 底 + muted 字）、QToolTip（panel 底）、QCheckBox/QRadioButton indicator（panel 底 + 选中 primary + 圆角）；说明区同步；验证：a13 回归过 + 截图读图（indicator 选中态呈 primary 实心）（2026-11-05 已验证）
+- [x] PL003.3 导入对话框分组 —— `ui/import_dialog.py` 布局重排四个 QGroupBox（①音频文件 ②载体类型 ③命名与归类 ④封面来源，Tag 标签补"置物架分组依据"提示）+ `setMinimumHeight(420)`；字段/校验/信号零变更；验证：a11 导入走查断言原样过 + 截图 08 读图分组清晰（2026-11-05 已验证）
+- [x] PL003.4 设置对话框增强 —— `ui/settings_dialog.py`：`_LEVEL_HINTS` 三档说明常量 + `currentTextChanged` 即时回显 + 自动翻面说明行 + `setMinimumWidth(340)`；验证：a13 持久化回归原样过 + 截图 09 读图（2026-11-05 已验证）
+- [x] PL003.5 快捷键 —— `ui/main_window.py` `_wire_shortcuts()`：三项 QShortcut（空格 → deck_view._on_play_clicked、← → play_prev、→ → play_next、F → flip，WindowShortcut）；`deck_view.py` 播放控制四按钮 setFocusPolicy(NoFocus)；验证：a11 追加真音频链路 QTest.keyClick 断言（空格 playing↔paused 翻转）+ NoFocus 断言过（2026-11-05 已验证；调试修一处窗口未激活导致快捷键不派发——探针补 show+activateWindow）
+- [x] PL003.6 PL003 收口 —— `base.json` → 0.1.4、README 徽章 0.1.4 + 快捷键表、a1 断言同步；全量 14 探针 PASS + 冒烟 + --version 0.1.4 + 全套截图终审（读图）；草拟 commit 交用户；真机核对三项（中文排版层级 / 高 DPI 清晰度 / 拖拽视觉反馈）留待用户日常使用复核（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.4）
+
 ## 未完成
 
-### PL003: 主题精修与交互补充 [z.plan#附录 PL003]
-
-> 目标：色彩体系分层（surface/panel/muted/disabled 四级外置），对话框分组化，桌面快捷键标配。依赖 PL001 的色板扩展地基。
-
-- [ ] PL003.1 色板分层扩展 —— `config/static/ui.json` colors 增 `surface` / `panel` / `muted` / `disabled` 四键（候选 #35302a / #3d3831 / #9a938a / #4a453e——定色流程：改 json → 重拍贴皮截图 → 读图比选）；验证：贴皮截图读图定色留档 + 冒烟
-- [ ] PL003.2 QSS 精修 —— `ui/themes.py` 模板扩展：QGroupBox（surface 底 + 圆角 + padding）、QLineEdit/QComboBox（panel 底 + border + 聚焦 primary 描边）、QMenu/QToolTip（panel 底）、QPushButton:disabled（disabled 底 + muted 字）、QComboBox 下拉 QAbstractItemView、QCheckBox/QRadioButton indicator 深色化；全部取色走 c 字典；验证：全视图 + 两对话框贴皮截图无白块、深色协调（读图）+ a11/a13 回归
-- [ ] PL003.3 导入对话框分组 —— `ui/import_dialog.py` `__init__` 重排四个 QGroupBox（①音频文件 ②载体类型 ③命名与归类 ④封面来源）+ buttons 右对齐 + `setMinimumHeight(420)`；字段/校验/信号零变更；验证：a11 导入走查断言原样过 + 截图 08 读图
-- [ ] PL003.4 设置对话框增强 —— `ui/settings_dialog.py`：档位下拉下加说明 QLabel（代码内常量字典三档文案）+ 自动翻面说明行 + `setMinimumWidth(340)`；验证：a13 持久化回归原样过 + 截图 09 读图
-- [ ] PL003.5 快捷键 —— `ui/main_window.py` `_wire_playback` 尾部三项 QShortcut（空格 → deck_view._on_play_clicked、←→ → engine.play_prev/play_next、F → engine.flip，context=WindowShortcut）；`ui/views/deck_view.py` 播放控制五按钮 `setFocusPolicy(NoFocus)`（防聚焦按钮空格双触发）；验证：a11 追加 QTest.keyClick 断言（空格翻转 state、←→ 切曲）+ 真机核对
-- [ ] PL003.6 PL003 收口 —— `base.json` 推进 `0.1.4`、README 徽章 + 快捷键表、a1 断言；全量回归 + 全套贴皮截图终审 + 真机核对三项（中文排版层级 / 高 DPI 清晰度 / 拖拽视觉反馈）交用户；草拟 commit 交用户（标题 V0.1.4.1）。
+（暂无条目——PL001-PL003 已全部完成，下一批方案走 plan-task 流程立项）

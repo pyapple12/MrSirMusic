@@ -24,6 +24,8 @@ def apply_theme(app: Any) -> None:
         "text_on_primary": str(colors.get("text_on_primary", "#FFFFFF")),
         "surface": str(colors.get("surface", "#35302A")),
         "panel": str(colors.get("panel", "#3A342C")),
+        "muted": str(colors.get("muted", "#9A938A")),
+        "disabled": str(colors.get("disabled", "#45403A")),
     }
     font_family = str(ui.get("font_family", "Microsoft YaHei"))
     qss = f"""
@@ -33,6 +35,8 @@ def apply_theme(app: Any) -> None:
         border-radius: 4px; padding: 4px 12px; }}
     QPushButton:hover {{ background-color: {c["hover"]}; }}
     QPushButton:pressed {{ background-color: {c["pressed"]}; }}
+    QPushButton:disabled {{ background-color: {c["disabled"]}; color: {c["muted"]};
+        border-color: {c["border"]}; }}
     QAbstractItemView {{ background-color: {c["background"]}; alternate-background-color: {c["surface"]};
         selection-background-color: {c["primary"]}; selection-color: {c["text_on_primary"]}; }}
     QListWidget {{ border: 1px solid {c["border"]}; }}
@@ -53,6 +57,14 @@ def apply_theme(app: Any) -> None:
         selection-background-color: {c["primary"]}; }}
     QMenu {{ background-color: {c["panel"]}; color: {c["text"]}; border: 1px solid {c["border"]}; }}
     QMenu::item:selected {{ background-color: {c["primary"]}; }}
+    QToolTip {{ background-color: {c["panel"]}; color: {c["text"]}; border: 1px solid {c["border"]}; }}
+    QCheckBox, QRadioButton {{ spacing: 8px; }}
+    QCheckBox::indicator, QRadioButton::indicator {{ width: 14px; height: 14px;
+        border: 1px solid {c["border"]}; background-color: {c["panel"]}; }}
+    QCheckBox::indicator {{ border-radius: 3px; }}
+    QCheckBox::indicator:checked {{ background-color: {c["primary"]}; }}
+    QRadioButton::indicator {{ border-radius: 8px; }}
+    QRadioButton::indicator:checked {{ background-color: {c["primary"]}; }}
     QStatusBar {{ background-color: {c["background"]}; color: {c["text"]}; }}
     QMenuBar {{ background-color: {c["background"]}; color: {c["text"]}; }}
     QMenuBar::item:selected {{ background-color: {c["primary"]}; }}
@@ -73,7 +85,8 @@ def apply_theme(app: Any) -> None:
 # apply_theme(app) -> None: 设置全局 QSS
 #   逻辑：ui.json colors/font_family 取色 → QSS 模板格式化 → app.setStyleSheet
 #   异常：无（ui.json 缺字段回退默认色，宽容）
-#   覆盖面（PL001.2 补全）：窗体/按钮/列表(QAbstractItemView)/Tab 页与页签/滚动区/分组框(surface 底)/
-#     输入件(QLineEdit/QComboBox panel 底 + 聚焦描边)/菜单/状态栏/滑杆——消除默认白块与深色窗的割裂
+#   覆盖面（PL001.2 补全）：窗体/按钮（含禁用态 PL003.2）/列表(QAbstractItemView)/Tab 页与页签/滚动区/
+#     分组框(surface 底)/输入件(panel 底 + 聚焦描边)/菜单/工具提示/勾选件 indicator(PL003.2)/
+#     状态栏/滑杆/滚动条——消除默认白块与深色窗的割裂
 #   设计理由：可调参数一律走配置（AGENTS.md）；QSS 集中在主题层便于换肤
-#   关联配置：config/static/ui.json（colors 含 surface/panel 分层色、font_family）
+#   关联配置：config/static/ui.json（colors 含 surface/panel/muted/disabled 四级分层色、font_family）

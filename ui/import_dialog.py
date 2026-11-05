@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFileDialog,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -65,24 +66,39 @@ class ImportDialog(QDialog):
         buttons.accepted.connect(self._on_ok)
         buttons.rejected.connect(self.reject)
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("音频文件："))
-        layout.addWidget(self.files_label)
-        layout.addWidget(self.pick_button)
-        layout.addWidget(QLabel("载体类型："))
-        layout.addWidget(self.type_combo)
-        layout.addWidget(QLabel("名称："))
-        layout.addWidget(self.name_edit)
-        layout.addWidget(QLabel("Tag："))
-        layout.addWidget(self.tag_edit)
-        layout.addWidget(QLabel("封面来源："))
+        # PL003.3：按生成流程四分组（字段/校验/信号零变更，只重排布局）
+        files_group = QGroupBox("① 音频文件")
+        files_layout = QVBoxLayout(files_group)
+        files_layout.addWidget(self.files_label)
+        files_layout.addWidget(self.pick_button)
+
+        type_group = QGroupBox("② 载体类型")
+        type_layout = QVBoxLayout(type_group)
+        type_layout.addWidget(self.type_combo)
+
+        name_group = QGroupBox("③ 命名与归类")
+        name_layout = QVBoxLayout(name_group)
+        name_layout.addWidget(QLabel("名称："))
+        name_layout.addWidget(self.name_edit)
+        name_layout.addWidget(QLabel("Tag（置物架分组依据）："))
+        name_layout.addWidget(self.tag_edit)
+
+        cover_group = QGroupBox("④ 封面来源")
+        cover_layout = QVBoxLayout(cover_group)
         cover_row = QHBoxLayout()
         cover_row.addWidget(self.placeholder_radio)
         cover_row.addWidget(self.local_radio)
         cover_row.addWidget(self.cover_path_edit)
         cover_row.addWidget(self.cover_pick_button)
-        layout.addLayout(cover_row)
+        cover_layout.addLayout(cover_row)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(files_group)
+        layout.addWidget(type_group)
+        layout.addWidget(name_group)
+        layout.addWidget(cover_group)
         layout.addWidget(buttons)
+        self.setMinimumHeight(420)
 
     def _pick_files(self) -> None:
         # 文件多选：QFileDialog 过滤音频扩展名；选择后更新标签
