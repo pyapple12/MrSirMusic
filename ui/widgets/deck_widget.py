@@ -1,15 +1,16 @@
-# 唱机绘制（H4 拟物升级）：转盘旋转（惯性缓动启停）+ 唱针真实几何（枢轴/臂杆/唱头）
-# 唱针角度映射面内播放进度，支持拖拽寻曲（按下暂停 → 绕枢轴拖动 → 松手落针按比例跳转）
-# 动画时长读 ui.json；类型级转速经 set_spin_ms 注入（item_types.json spin_ms_per_rev）
+# 唱机绘制（H4 拟物升级 / PL002 形态分化）：按载体类型三分形态——
+# vinyl 黑胶转盘（唱针真实几何 + 拖拽寻曲）/ cassette 磁带仓（观察窗双卷轴 + 双飞轮）/ cd 碟舱（中心孔 + 封面环带）
+# 转盘旋转惯性缓动启停；唱针角映射面内播放进度（仅黑胶）；动画时长读 ui.json；类型级转速经 set_spin_ms 注入
 
 import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from config.static.static_config import get_static_config
 from modules.items.model import Item
+from ui.widgets.parts import draw_reel, reel_factor
 
 # 静态配置一次解包
 _SC = get_static_config()
@@ -28,6 +29,7 @@ _DROP_MAX = _ANGLE_START + _ANGLE_RANGE + 2.0  # 有效落针角上界（度）
 _HIT_RADIUS = 27.0  # 唱针命中半径（像素，以唱针尖端为圆心）
 _NEEDLE_FINE_STEP = 0.1  # Shift 精调系数（拖拽增量缩放）
 _SPIN_EASE = 2.2  # 转盘惯性趋近系数（speed += (target-speed)*min(1, dt*k)）
+_DECK_REEL_BASE_SPEED = 240.0  # 磁带仓观察窗卷轴基准角速度（度/秒，除以带卷因子，PL002.3）
 
 
 class DeckWidget(QWidget):
@@ -41,8 +43,12 @@ class DeckWidget(QWidget):
         super().__init__(parent)
         self._item = item
         self._playing = False
+        self._item_type = "vinyl"  # PL002：载体形态（vinyl/cassette/cd，set_item_type 注入）
+        self._cover: QPixmap | None = None  # PL002：CD 封面环带用（deck_view 注入）
         self._angle = 0.0
         self._spin_speed = 0.0  # 转盘角速度（度/秒，惯性缓动）
+        self._reel_angle_l = 0.0  # PL002 磁带仓观察窗左卷轴角（度）
+        self._reel_angle_r = 0.0  # 右卷轴角（度）
         self._tonearm_pos = 0.0  # 0=抬起 1=落下
         self._side_progress = 0.0  # 面内进度 0-1（唱针落针角映射源）
         self._dragging = False  # 拖针进行中（唱针角度直接跟随鼠标）
@@ -91,6 +97,13 @@ class DeckWidget(QWidget):
         if value > 0:
             self._spin_ms = value
 
+    def set_item_type(self, key: str, cover: QPixmap | None = None) -> None:
+        # 载体形态切换（PL002）：vinyl/cassette/cd 三分绘制；CD 附封面环带 pixmap（可 None）
+        # 未知键回退 vinyl（宽容）；切换后重绘
+        self._item_type = str(key) if str(key) in ("vinyl", "cassette", "cd") else "vinyl"
+        self._cover = cover
+        self.update()
+
     def set_progress(self, fraction: float) -> None:
         # 面内进度注入（H4：唱针落针角映射源；拖拽中不覆盖预览角）
         if isinstance(fraction, (int, float)) and not isinstance(fraction, bool):
@@ -128,6 +141,14 @@ class DeckWidget(QWidget):
         )
         if abs(self._spin_speed) > 0.02:
             self._angle = (self._angle + self._spin_speed * dt) % 360.0
+        # PL002 磁带仓卷轴：播放中按恒线速推进（观察窗卷轴转动视觉）
+        if self._item_type == "cassette" and self._playing and self._animations_enabled:
+            self._reel_angle_l = (
+                self._reel_angle_l - dt * _DECK_REEL_BASE_SPEED / reel_factor(1.0 - self._side_progress)
+            ) % 360.0
+            self._reel_angle_r = (
+                self._reel_angle_r - dt * _DECK_REEL_BASE_SPEED / reel_factor(self._side_progress)
+            ) % 360.0
         target = 1.0 if self._playing else 0.0
         step = self._tick_ms / max(1, self._drop_ms)
         if self._tonearm_pos < target:
@@ -164,8 +185,9 @@ class DeckWidget(QWidget):
 
     def mousePressEvent(self, event) -> None:
         # 拖针开始：命中唱针尖端 27px 圆域才进入拖拽；记录指针绕枢轴角（解卷基准），
-        # 发 needle_drag_started（路由方暂停——拟物语义：提针即停转）
-        if event.button() != Qt.MouseButton.LeftButton:
+        # 发 needle_drag_started（路由方接 engine.pause——提针即停转）；
+        # PL002：非黑胶形态无唱针，命中测试直接失败（零信号）
+        if event.button() != Qt.MouseButton.LeftButton or self._item_type != "vinyl":
             super().mousePressEvent(event)
             return
         rect = self._arm_rect()
@@ -231,10 +253,20 @@ class DeckWidget(QWidget):
         return math.degrees(math.atan2(pivot.x() - pos.x(), pos.y() - pivot.y()))
 
     def paintEvent(self, event) -> None:
-        # 绘制：转盘（旋转画槽纹）+ 唱针（枢轴/臂杆/唱头/配重，按视觉角摆动）
+        # 绘制（PL002 分形态）：vinyl 转盘 + 唱针 / cassette 磁带仓 / cd 碟舱
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self._arm_rect()
+        if self._item_type == "cassette":
+            self._paint_cassette_deck(painter, rect)
+        elif self._item_type == "cd":
+            self._paint_cd(painter, rect)
+        else:
+            self._paint_vinyl(painter, rect)
+        painter.end()
+
+    def _paint_vinyl(self, painter: QPainter, rect: QRectF) -> None:
+        # 黑胶形态（H4 现状）：转盘（旋转画槽纹）+ 唱针（枢轴/臂杆/唱头/配重，按视觉角摆动）
         painter.save()
         painter.translate(rect.center())
         painter.rotate(self._angle)
@@ -259,7 +291,145 @@ class DeckWidget(QWidget):
             )
         painter.restore()
         self._paint_tonearm(painter, rect)
-        painter.end()
+
+    def _paint_cassette_deck(self, painter: QPainter, rect: QRectF) -> None:
+        # 磁带仓形态（PL002.3）：深色壳 + 中央观察窗（共享卷轴，半径随面内进度胀缩）
+        # + 双飞轮（角度随转盘角加速旋转，播放视觉）+ 底部走带路径 + 四角螺丝
+        painter.save()
+        # 外壳（深色渐变圆角矩形，拟磁带仓机身）
+        shell = QRadialGradient(rect.center(), rect.width() * 0.75)
+        shell.setColorAt(0.0, QColor("#3d3d46"))
+        shell.setColorAt(1.0, QColor("#1e1e26"))
+        painter.setBrush(shell)
+        painter.setPen(QPen(QColor("#55556a"), 1))
+        painter.drawRoundedRect(rect, 10, 10)
+        # 四角螺丝
+        painter.setBrush(QColor("#777788"))
+        painter.setPen(QPen(QColor("#44445a"), 1))
+        offset = 12.0
+        for cx, cy in (
+            (rect.left() + offset, rect.top() + offset),
+            (rect.right() - offset, rect.top() + offset),
+            (rect.left() + offset, rect.bottom() - offset),
+            (rect.right() - offset, rect.bottom() - offset),
+        ):
+            painter.drawEllipse(QPointF(cx, cy), 2.5, 2.5)
+        # 观察窗（内嵌深色，窗内两卷轴经共享绘制；fill 左=1-进度 右=进度）
+        win = QRectF(
+            rect.left() + rect.width() * 0.16,
+            rect.top() + rect.height() * 0.18,
+            rect.width() * 0.68,
+            rect.height() * 0.40,
+        )
+        painter.setBrush(QColor(20, 20, 26))
+        painter.setPen(QPen(QColor("#55556a"), 1))
+        painter.drawRoundedRect(win, 4, 4)
+        r_max = win.height() * 0.42
+        r_min = r_max * 0.42
+        hub = r_min * 0.62
+        centers = (
+            QPointF(win.left() + win.width() * 0.26, win.center().y()),
+            QPointF(win.left() + win.width() * 0.74, win.center().y()),
+        )
+        fills = (1.0 - self._side_progress, self._side_progress)
+        angles = (self._reel_angle_l, self._reel_angle_r)
+        for center, fill, angle in zip(centers, fills, angles):
+            t = (reel_factor(fill) - 44.0) / (77.0 - 44.0)
+            draw_reel(painter, center, r_min + (r_max - r_min) * t, hub, angle)
+        # 走带路径（窗内底部横线）
+        painter.setPen(QPen(QColor("#4a3f36"), 1))
+        painter.drawLine(
+            QPointF(win.left() + win.width() * 0.12, win.bottom() - 3.0),
+            QPointF(win.right() - win.width() * 0.12, win.bottom() - 3.0),
+        )
+        # 双飞轮（观察窗下方两侧，播放时随 _angle 加速旋转——辐条 3 根示意转动）
+        fly_y = rect.top() + rect.height() * 0.72
+        fly_r = rect.width() * 0.055
+        fly_angle = self._angle * 1.8
+        for cx in (
+            rect.left() + rect.width() * 0.22,
+            rect.right() - rect.width() * 0.22,
+        ):
+            center = QPointF(cx, fly_y)
+            painter.setBrush(QColor("#8a8a9a"))
+            painter.setPen(QPen(QColor("#55556a"), 1))
+            painter.drawEllipse(center, fly_r, fly_r)
+            painter.save()
+            painter.translate(center)
+            painter.rotate(fly_angle)
+            painter.setPen(QPen(QColor("#3a3a46"), 1))
+            for _ in range(3):
+                painter.rotate(120.0)
+                painter.drawLine(QPointF(0, 0), QPointF(0, -fly_r * 0.85))
+            painter.restore()
+        # 品牌标签条（壳体上部窄横条，拟磁带仓铭牌）
+        painter.setBrush(QColor("#2a2a34"))
+        painter.setPen(QPen(QColor("#44445a"), 1))
+        painter.drawRect(
+            QRectF(
+                rect.left() + rect.width() * 0.3,
+                rect.top() + rect.height() * 0.06,
+                rect.width() * 0.4,
+                rect.height() * 0.05,
+            )
+        )
+        painter.restore()
+
+    def _paint_cd(self, painter: QPainter, rect: QRectF) -> None:
+        # CD 碟舱形态（PL002.4）：银灰碟面 + OddEven 真镂空中心孔 + 封面环带 + 3 夹持爪 + 淡槽纹
+        center = rect.center()
+        radius = rect.width() / 2
+        painter.save()
+        painter.translate(center)
+        painter.rotate(self._angle)
+        # 碟面：OddEven 双圆路径（外缘 + 中心孔）——孔洞真透出窗底色（非画深色圆模拟）
+        disc = QPainterPath()
+        disc.addEllipse(QPointF(0, 0), radius, radius)
+        hole_r = radius * 0.08
+        disc.addEllipse(QPointF(0, 0), hole_r, hole_r)
+        disc.setFillRule(Qt.FillRule.OddEvenFill)
+        disc_gradient = QRadialGradient(0, 0, radius)
+        disc_gradient.setColorAt(0.0, QColor("#e2e6ec"))
+        disc_gradient.setColorAt(0.6, QColor("#c8ccd4"))
+        disc_gradient.setColorAt(1.0, QColor("#7a8088"))
+        painter.setBrush(disc_gradient)
+        painter.setPen(QPen(QColor("#5a5f66"), 1))
+        painter.drawPath(disc)
+        # 封面环带（r 22%..55% 环形裁剪内画封面；无封面画素色环 + 中心纹样）
+        ring = QPainterPath()
+        ring.addEllipse(QPointF(0, 0), radius * 0.55, radius * 0.55)
+        ring.addEllipse(QPointF(0, 0), radius * 0.22, radius * 0.22)
+        ring.setFillRule(Qt.FillRule.OddEvenFill)
+        painter.save()
+        painter.setClipPath(ring)
+        if self._cover is not None:
+            half = radius * 0.55
+            painter.drawPixmap(
+                QRectF(-half, -half, half * 2, half * 2).toRect(), self._cover
+            )
+        else:
+            painter.setBrush(QColor("#8a9098"))
+            painter.setPen(QPen(QColor("#6a6f76"), 1))
+            painter.drawEllipse(QPointF(0, 0), radius * 0.55, radius * 0.55)
+            painter.setPen(QPen(QColor("#6a6f76"), 1))
+            painter.drawEllipse(QPointF(0, 0), radius * 0.34, radius * 0.34)
+        painter.restore()
+        # 淡槽纹两圈（封面环带外缘的盘面细纹）
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor(90, 95, 102, 120), 1))
+        painter.drawEllipse(QPointF(0, 0), radius * 0.66, radius * 0.66)
+        painter.drawEllipse(QPointF(0, 0), radius * 0.78, radius * 0.78)
+        # 夹持爪（孔缘 3 个 120° 短爪）+ 中轴环
+        painter.setPen(QPen(QColor("#4a4f56"), 1))
+        painter.setBrush(QColor("#6a6f76"))
+        for i in range(3):
+            painter.save()
+            painter.rotate(i * 120.0)
+            painter.drawRect(QRectF(-hole_r * 0.5, -hole_r * 1.9, hole_r, hole_r * 1.5))
+            painter.restore()
+        painter.setBrush(QColor("#3a3f46"))
+        painter.drawEllipse(QPointF(0, 0), hole_r * 0.8, hole_r * 0.8)
+        painter.restore()
 
     def _paint_tonearm(self, painter: QPainter, rect: QRectF) -> None:
         # 唱针绘制（H4 真实几何）：枢轴底座 + 配重（反向短臂）+ 臂杆（硬阴影双层）+ 唱头（尖端）
@@ -303,19 +473,21 @@ class DeckWidget(QWidget):
 # _SC: 静态配置单例（动画时长）
 # 几何常量（视觉常量豁免先例）：_PIVOT_X/_PIVOT_Y/_ARM_LENGTH 布局比例、
 #   _ANGLE_START/_ANGLE_RANGE 落针角与扫过角、_ANGLE_REST 静息角、拖拽钳制/命中半径
-# DeckWidget(QWidget): 唱机绘制（转盘惯性旋转 + 唱针真实几何 + 拖拽寻曲）
-#   needle_drag_started: 拖针开始信号（路由方接 engine.pause——提针停转）
-#   needle_dropped(float): 落针信号（面内比例 0-1，路由方接 engine.seek_side）
+# DeckWidget(QWidget): 唱机绘制（PL002 三形态分派：vinyl 转盘唱针 / cassette 磁带仓 / cd 碟舱）
+#   set_item_type(key, cover): 载体形态切换（未知键回退 vinyl；CD 附封面环带 pixmap）
+#   needle_drag_started/needle_dropped(float): 唱针交互信号（仅 vinyl；非 vinyl 命中直接失败）
 #   set_playing(playing): 定时器启停（拖拽中不抢唱针控制权）
 #   set_animations_enabled(enabled): 档位联动（拖拽属交互不受档位限制）
 #   set_spin_ms(spin_ms): 类型级转速注入（item_types.spin_ms_per_rev，H2）
-#   set_progress(fraction): 面内进度注入（唱针落针角映射源，H4）
+#   set_progress(fraction): 面内进度注入（唱针角/磁带仓卷轴胀缩共用，H4）
 #   _tick(): 转盘角速度惯性趋近（缓动启停）+ 唱针位置插值
 #   _visual_angle(): 渲染角（拖拽角优先，否则静息↔落针按 _tonearm_pos 插值）
 #   mousePress/Move/ReleaseEvent: 拖针交互（27px 命中 → atan2 解卷拖拽 → 有效窗落针/窗外取消）
-#   _paint_tonearm: 枢轴/配重/臂杆（硬阴影）/唱头绘制
+#   _paint_vinyl: 转盘槽纹 + _paint_tonearm（枢轴/配重/臂杆硬阴影/唱头）
+#   _paint_cassette_deck: 仓壳 + 观察窗（parts.draw_reel 双卷轴胀缩）+ 双飞轮 + 走带线 + 螺丝
+#   _paint_cd: OddEven 真镂空碟面 + 封面环带（22%..55%）+ 3 夹持爪 + 淡槽纹
 #   angle/tonearm_position: 状态只读（验证断言）
-#   设计理由：唱针角 ↔ 面内进度线性映射（角度几何参考拟物唱机实物比例）；
-#     拖拽暂停/落针跳转全部经信号外抛（控件零业务依赖）
+#   设计理由：形态随载体切换消除语义冲突（磁带时右侧不再是无唱针的黑胶转盘）；
+#     拖拽暂停/落针跳转全部经信号外抛（控件零业务依赖）；卷轴/带卷物理复用 ui/widgets/parts
 #   关联配置：config/static/ui.json（animation.record_spin_ms/tonearm_drop_ms/spin_tick_ms）；
 #     类型转速 item_types.json spin_ms_per_rev（set_spin_ms 注入）

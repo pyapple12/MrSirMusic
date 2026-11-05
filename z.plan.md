@@ -315,7 +315,7 @@ Track: path / title / artist / album / duration(秒) / format
 
 ## 附录 PL001：布局修缮与占位图重绘（2026-11-05 立项）
 
-> 状态：📌 待实施（任务组见 x.progress.md「PL001」）。**依据**：V0.1.1.0 贴皮截图评审（素材 `.temp/ui_review_shots.py`，方法 = F:\Collection taste-skill critique 十四遍观察法 + app-screens + game-ui-ux/game-feel），评审总评 ≈5.8/10，差距在壳层不在拟物控件。
+> 状态：✅ 已完成（2026-11-05 收口，全量 14 探针 PASS + 三档截图终审读图通过；任务组见 x.progress.md「PL001」）。**依据**：V0.1.1.0 贴皮截图评审（素材 `.temp/ui_review_shots.py`，方法 = F:\Collection taste-skill critique 十四遍观察法 + app-screens + game-ui-ux/game-feel），评审总评 ≈5.8/10，差距在壳层不在拟物控件。
 
 **定案口径**
 
@@ -332,7 +332,7 @@ Track: path / title / artist / album / duration(秒) / format
 
 ## 附录 PL002：唱机形态分化与库列表行重设计（2026-11-05 立项）
 
-> 状态：📌 待实施（依赖 PL001 收口；任务组见 x.progress.md「PL002」）。
+> 状态：✅ 已完成（2026-11-05 收口，全量 14 探针 PASS + 三形态截图终审读图通过；任务组见 x.progress.md「PL002」）。
 
 **定案口径**
 
@@ -341,7 +341,7 @@ Track: path / title / artist / album / duration(秒) / format
 - DRY 定案：卷轴绘制从 record_widget 迁出为共享 `ui/widgets/parts.py`（record_widget 与 deck_widget 共用），不复制两份
 - 交互定案：非黑胶时唱针命中测试直接失败（needle_dropped / needle_drag_started 零发射）；进度滑条 scrub 三态全类型可用
 - 库列表定案：条目文本两行化（名称主行 / 形态·Tag·时长次行），缩略图标保留
-- 版本定案：收口推进 `0.1.3`（commit 标题 V0.1.3.1 起）
+- 版本定案：收口推进 `0.1.2`（与 PL001 合并为同一内容版本，用户定案；commit 标题 V0.1.2.1 起）
 
 **明确不做**：磁带/CD 的专属音效（磁带机械声已存在、CD 数字静音为拟物正确）；3D 视图（Spun 参考结论：2D 已覆盖全部交互语义）。
 

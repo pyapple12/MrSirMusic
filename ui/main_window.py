@@ -47,6 +47,8 @@ class MainWindow(QMainWindow):
         self.resize(
             int(ui.get("window_width", 1100)), int(ui.get("window_height", 720))
         )
+        # PL001.5：最小窗口约束（拟物控件 200+220 固定宽 + 列表可读下限，窄于此布局挤坏）
+        self.setMinimumSize(980, 640)
 
         self._items: list[Item] = []
         self._current_item: Item | None = None  # H3 音效门控（载体类型/落针音判定源）

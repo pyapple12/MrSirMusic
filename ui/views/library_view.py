@@ -18,6 +18,7 @@ from modules.cover.providers import resolve_cover
 from modules.items.model import Item
 from config.static.static_config import get_static_config
 from ui.dnd import ITEM_MIME_TYPE, encode_item_id
+from utils.convert import format_duration
 
 # 静态配置一次解包（缩略图尺寸走 ui.json，B2.8）
 _SC = get_static_config()
@@ -49,6 +50,8 @@ class LibraryView(QWidget):
         self._items: list[Item] = []
         self.list = _ItemList()
         self.list.setDragEnabled(True)
+        # PL001.5 配套：行内长文本裁切优于横向滚动（窄窗可读性；竖滚保留）
+        self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.list.currentItemChanged.connect(self._on_selection_changed)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
@@ -59,11 +62,15 @@ class LibraryView(QWidget):
         layout.addWidget(self.detail_label, 1)
 
     def set_items(self, items: list[Item]) -> None:
-        # 注入物品列表：刷新列表项（封面缩略图标 + 文本）并保持选中态
+        # 注入物品列表：刷新列表项（封面缩略图标 + PL002 两行文本：名称主行 / 形态·Tag·时长次行）
         self._items = items
         self.list.clear()
         for item in items:
-            text = f"{item.name}｜{item.type.name}｜{item.tag}｜播放 {item.play_count}"
+            text = (
+                f"{item.name}\n"
+                f"{item.type.name}·{item.tag or '未分类'}·"
+                f"{format_duration(item.total_seconds())}"
+            )
             entry = QListWidgetItem(text)
             cover = resolve_cover(item)
             if cover and Path(cover).is_file():

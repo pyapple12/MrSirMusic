@@ -10,14 +10,16 @@
     "border": "#3A3A3A",
     "background": "#232323",
     "text": "#EAE6DF",
-    "text_on_primary": "#FFFFFF"
+    "text_on_primary": "#FFFFFF",
+    "surface": "#35302A",
+    "panel": "#3A342C"
   },
   "animation": {
     "record_spin_ms": 2000,
     "tonearm_drop_ms": 500
   },
   "thumbnail_size": 32,
-  "card_size": [110, 90],
+  "card_size": [128, 128],
   "drag_threshold": 8,
   "record_widget_size": 200,
   "deck_widget_size": 220,

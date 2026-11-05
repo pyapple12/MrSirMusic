@@ -137,29 +137,29 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 磁带卷轴动画（H6）：record_widget 升级——观察窗内双卷带（半径按带卷物理因子胀缩）+ 缠绕纹理 + 花键 hub 3 齿随角度旋转 + 走带路径线；恒线速模型（角速度 = 基准/半径因子，卷多转慢）；set_playing/set_animations_enabled/set_reel_progress/set_wind；定时器仅唱机实例播放中启动（置物架卡片保持静态）；scrub 方向驱动 wind 快进/倒带视觉
 验证收尾（H7）：H7.1 全量 14 探针 PASS + 冒烟 + GUI 无头 init + --version 0.1.1.0；H7.2 截图核对（唱针几何/磁带卷轴/落针到位渲染，多模态读图通过）；H7.3 探针适配与补强（a6 迁移防御、a9 音频输出/seek_side/状态同步、a11 滑条值域、a12 惯性/落针/卷轴/scrub、a13 音效资源与装配）；H7.4 文档同步（w.study 第 10 节参考研读 / README 播放与音效说明 / 版本三方一致）
 
+### PL001: 布局修缮与占位图重绘 [z.plan#附录 PL001] ✅
+
+> 结果：三大观感硬伤全消（红占位图 → 128×128 暗纹音符占位 / 唱机区居中构图 + 按钮 96px 成排 + 滑条限宽 / 白块割裂全消含 Tab 页·滚动区·组框·输入件）+ 最小窗口 980×640 + 窄窗横向滚动条消除；全量 14 探针 PASS。评审依据 z.plan.md 附录 PL001。
+
+- [x] PL001.1 占位图重绘 —— 新建 `.temp/make_placeholder.py`（离屏 QPixmap 绘制）：128×128 深胶木底径向渐变 + 三圈同心纹 + 音符刻痕 + 外缘描边，覆盖 `data/placeholder.png`；验证：读图断言 128×128 且中心 #342f29 ≠ #ff0000；截图中心呈暗纹音符（2026-11-05 已验证：尺寸/像素断言过 + 贴皮截图读图非红）
+- [x] PL001.2 白块割裂修复 —— 定案根因 = QTabWidget 页面默认白（非最初候选）+ QScrollArea/QGroupBox 默认浅底；`ui/themes.py` QSS 补 QTabWidget::pane / QTabBar::tab / QScrollArea 透明 / QGroupBox surface 底 + padding / QAbstractItemView / QMenu / QScrollBar 深色（收口追加）；`ui.json` colors 增 surface/panel 两键；验证：重拍 01/02/08 读图无白色异质区（2026-11-05 已验证：三视图 + 对话框全协调）
+- [x] PL001.3 deck_view 布局重构 —— `ui/views/deck_view.py`：art_row 对称 stretch 居中 + 组间距 16；四按钮 setFixedWidth(96) + spacing 12 居中成排；progress_widget maxWidth(420) 行居中；track_label 水平居中；验证：a12 追加 play_button.width ≤96 / 滑条限宽 / 标签居中三断言过 + 三档截图无巨条无大空洞（2026-11-05 已验证：读图通过）
+- [x] PL001.4 置物架组框与卡片重设计 —— `ui.json` card_size [128,128]；`ui/views/shelf_view.py` DraggableCardButton 改收 Item（封面缩略 setIcon 56×56 + 两行文本 `名称\n形态·N曲`）+ 组框 margins(12,20,12,12) 修溢出 + 组间距 10；验证：截图 02 卡片不越界含缩略图（读图）+ a12 拖放回归 + a11 分组断言过（2026-11-05 已验证）
+- [x] PL001.5 最小窗口尺寸 —— `ui/main_window.py` setMinimumSize(980, 640)；配套 `library_view` 关横向滚动条（窄窗行文本裁切优于横滚）+ QScrollBar 深色样式；验证：a11 追加 minimumSize 断言过 + 980×640 截图无横向滚动条（2026-11-05 已验证）
+- [x] PL001.6 PL001 收口 —— `base.json` → 0.1.2、README 徽章 0.1.2、a1 断言同步；全量 14 探针 PASS + 冒烟 + --version 0.1.2 + 三档截图终审（读图）；草拟 commit 交用户（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.2）
+
+### PL002: 唱机形态分化与库列表行重设计 [z.plan#附录 PL002] ✅
+
+> 结果：唱机区随载体三分形态（黑胶转盘+唱针 / 磁带仓观察窗双卷轴+双飞轮 / CD 碟舱 OddEven 镂空+封面环带+夹持爪），"播磁带时右侧是黑胶唱机"语义冲突消除；库列表行两行化；全量 14 探针 PASS。
+
+- [x] PL002.1 共享绘制模块 —— 新建 `ui/widgets/parts.py`（`REEL_RADIUS_MIN/MAX` + `reel_factor(fill)` + `draw_reel(painter, center, radius, hub_radius, angle)`），record_widget 卷轴绘制/角速度计算改引共享（行为零变更）；验证：a12 卷轴断言原样过 + 冒烟含 ui.widgets.parts（2026-11-05 已验证）
+- [x] PL002.2 类型分派骨架 —— `deck_widget.py`：`set_item_type(key, cover)`（未知键回退 vinyl）+ `_item_type` 分派 paintEvent；非 vinyl 唱针 mousePress 直接失败（零信号）；验证：a12 追加三形态 grab 非空 + CD 模拟 press/release 零落针断言过（2026-11-05 已验证）
+- [x] PL002.3 磁带仓形态 —— `_paint_cassette_deck`：仓壳径向渐变 + 观察窗（parts.draw_reel 双卷轴随 `_side_progress` 胀缩）+ 双飞轮（`_angle×1.8` 辐条旋转）+ 走带线 + 四角螺丝 + 铭牌条；DeckWidget 增 `_reel_angle_l/_r` 于 `_tick` 恒线速推进（修复一次引用缺失段错误）；验证：磁带播放截图读图（卷轴/飞轮/壳体成立）（2026-11-05 已验证）
+- [x] PL002.4 CD 舱形态 —— `_paint_cd`：银灰径向渐变碟面 + QPainterPath OddEvenFill 中心孔（8% 真镂空透窗底）+ 封面环带（22%..55% 环裁，无封面素环）+ 3 夹持爪 + 两圈淡槽纹；验证：CD 播放截图读图（碟面/孔/爪成立）（2026-11-05 已验证）
+- [x] PL002.5 deck_view 接线与库列表行 —— `deck_view.load_item` 取 resolve_cover pixmap 注入 `set_item_type(item.type.key, cover)`；`library_view.set_items` 文本两行化 `名称\n形态·Tag·时长`（format_duration）；验证：a11 回归过（详情断言不受影响）+ 三形态截图读图（2026-11-05 已验证）
+- [x] PL002.6 PL002 收口 —— `base.json` → 0.1.2（与 PL001 合并为一个内容版本提交）、README 徽章 + 播放段补形态说明、a1 断言同步；全量 14 探针 PASS + 冒烟 + --version 0.1.2 + 三形态截图终审（读图）；草拟 commit 交用户（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.2）
+
 ## 未完成
-
-### PL001: 布局修缮与占位图重绘 [z.plan#附录 PL001]
-
-> 目标：消除三大观感硬伤（红占位图 / 唱机区布局空洞与按钮巨条 / 白块割裂）+ 最小窗口约束；纯视觉零行为变更。评审依据与方案定案见 z.plan.md 附录 PL001。
-
-- [ ] PL001.1 占位图重绘 —— 新建 `.temp/make_placeholder.py`（QApplication 离屏 QPixmap 绘制后 save）：128×128，深胶木底径向渐变（#2a2622）+ 三圈细同心纹（#4a4238）+ 中央音符刻痕简形（#5a5248）+ 外缘 1px 描边，覆盖 `data/placeholder.png`；验证：QPixmap 读图断言尺寸 128×128 且中心像素 ≠ #ff0000；无封面 RecordWidget 渲染截图中心为暗色纹理非红块（读图）
-- [ ] PL001.2 白块割裂排查修复 —— 先以 `.temp/ui_review_shots.py` 01/02 图定位白色块组件归属（候选：QScrollArea viewport 默认白 / QGroupBox 无 background 规则 / 详情 QLabel 未参与主题）；`ui/themes.py` QSS 追加 `QScrollArea > QWidget > QWidget { background: transparent; }` + QGroupBox surface 底 + `QAbstractItemView` background + QLineEdit/QComboBox 深色规则（surface/panel 新色键先入 ui.json colors）；验证：重拍 01/02 读图无白色异质区 + 冒烟 import OK
-- [ ] PL001.3 deck_view 布局重构 —— `ui/views/deck_view.py` `__init__` 布局段：art_row 两侧 addStretch 水平居中；四按钮各 `setFixedWidth(96)` + spacing 12 + 行居中；progress_widget 包 HBox 两侧 stretch + `setMaximumWidth(420)`；垂直节奏 addSpacing（art_row 后 16 / controls 前 12 / 滑条区前 8 / 顶部 8）；验证：1100/1440/900 三档重拍截图无巨条无大空洞（读图）+ a12 追加断言 `play_button.width() <= 96`
-- [ ] PL001.4 置物架组框与卡片重设计 —— `config/static/ui.json` card_size 改 [128,128]；`ui/views/shelf_view.py` DraggableCardButton 加封面缩略图标（resolve_cover → scaled 96×64 + setIconSize）+ 文本改两行 `名称\n形态·N曲`；组框 `setContentsMargins(12,16,12,12)` 修卡片溢出 + `_shelf_layout.setSpacing(10)`；验证：截图 02 卡片不越组框边界且含缩略图（读图）+ a12 拖放回归 + a11 分组断言仍过
-- [ ] PL001.5 最小窗口尺寸 —— `ui/main_window.py` `__init__` resize 后加 `self.setMinimumSize(980, 640)`；验证：探针断言 `win.minimumSize().width() >= 980` + 900×620 截图列表无横向滚动条（读图）
-- [ ] PL001.6 PL001 收口 —— `base.json` version 推进 `0.1.2`、README 徽章同步、a1 版本断言同步；全量 14 探针 + 冒烟 + `--version` 0.1.2 + 三档截图终审（读图）；草拟 commit 交用户（标题 V0.1.2.1）
-
-### PL002: 唱机形态分化与库列表行重设计 [z.plan#附录 PL002]
-
-> 目标：唱机区随载体切换拟物形态（黑胶转盘 / 磁带仓 / CD 舱），消除"播磁带时右侧是黑胶唱机"的语义冲突；库列表行两行重设计。依赖 PL001 收口。
-
-- [ ] PL002.1 共享绘制模块 —— 新建 `ui/widgets/parts.py`：`record_widget._paint_reels` 逻辑迁为模块级 `draw_reel(painter, center, radius, angle, hub_ratio)`（带卷圆 + 缠绕纹 + 花键 hub 3 齿），record_widget 改调用（行为零变更）；验证：a12 卷轴断言原样过 + 冒烟 import 含 ui.widgets.parts
-- [ ] PL002.2 DeckWidget 类型分派骨架 —— `deck_widget.py`：`set_item_type(key)` 新方法（deck_view.load_item 注入，默认 "vinyl"）；paintEvent 分派 vinyl→现状转盘唱针 / cassette→PL002.3 / cd→PL002.4 / 未知回退 vinyl；非 vinyl 时唱针 mousePress 命中测试直接 return（零信号）；验证：三类型 grab 非空 + set_item_type("cd") 后模拟 mousePress/Release 无 needle_dropped 发射
-- [ ] PL002.3 磁带仓形态 —— `_paint_cassette_deck`：深色渐变壳圆角矩形 + 中央观察窗（复用 parts.draw_reel，半径因子随 `_side_progress` 胀缩）+ 双飞轮小圆（角度 = `_angle×1.8`）+ 底部走带路径线 + 四角螺丝点；验证：磁带播放两帧截图对比（飞轮角度变化、卷轴转动）+ 暂停态静止（读图）
-- [ ] PL002.4 CD 舱形态 —— `_paint_cd`：银灰径向渐变碟面（#c8ccd4→#7a8088）+ QPainterPath OddEvenFill 中心孔（半径 8% 真镂空）+ 封面环带（resolve_cover 裁 r 22%..55%）+ 3 夹持爪（120° 分布）+ 淡槽纹；旋转沿用 `_angle`、无唱针；验证：CD 播放截图中心孔透出窗底色证明镂空 + 封面环带显示（读图）
-- [ ] PL002.5 deck_view 接线与库列表行 —— `deck_view.load_item` 加 `set_item_type(item.type.key)`；`ui/views/library_view.py` `set_items` 条目文本改两行 `名称\n形态·Tag·时长`（format_duration 引自 utils.convert）；验证：a12 追加 load 磁带后 `_item_type == "cassette"` 断言 + a11 列表文本断言同步 + 截图读图
-- [ ] PL002.6 PL002 收口 —— `base.json` 推进 `0.1.3`、README 徽章、a1 断言；全量回归 + 冒烟 + `--version` 0.1.3 + 三形态截图终审（读图）；草拟 commit 交用户（标题 V0.1.3.1）
 
 ### PL003: 主题精修与交互补充 [z.plan#附录 PL003]
 

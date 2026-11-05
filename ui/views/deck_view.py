@@ -57,6 +57,7 @@ class DeckView(QWidget):
 
         self.track_label = QLabel("未载入物品")
         self.track_label.setWordWrap(True)
+        self.track_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)  # PL001.3：随居中构图
 
         self.play_button = QPushButton("播放")
         self.prev_button = QPushButton("上一首")
@@ -66,23 +67,49 @@ class DeckView(QWidget):
 
         self.progress_widget = ProgressWidget()
         self.progress_bar = self.progress_widget.bar  # 兼容别名（进度条实例）
+        # PL001.3：滑条区限宽居中（不再全宽拉伸）
+        self.progress_widget.setMaximumWidth(420)
 
+        # PL001.3：拟物控件组水平居中（两侧对称留白 = 有意呼吸，替代原左对齐 + 右侧大片空洞）
         art_row = QHBoxLayout()
+        art_row.addStretch(1)
         art_row.addWidget(self.record_widget)
+        art_row.addSpacing(16)
         art_row.addWidget(self.deck_widget)
         art_row.addStretch(1)
 
+        # PL001.3：按钮固定宽居中成排（替代原全宽拉伸巨条）
+        for button in (
+            self.prev_button,
+            self.play_button,
+            self.next_button,
+            self.flip_button,
+        ):
+            button.setFixedWidth(96)
         controls = QHBoxLayout()
+        controls.setSpacing(12)
+        controls.addStretch(1)
         controls.addWidget(self.prev_button)
         controls.addWidget(self.play_button)
         controls.addWidget(self.next_button)
         controls.addWidget(self.flip_button)
+        controls.addStretch(1)
+
+        # PL001.3：滑条行与按钮行同宽居中（时间标签随行）
+        progress_row = QHBoxLayout()
+        progress_row.addStretch(1)
+        progress_row.addWidget(self.progress_widget)
+        progress_row.addStretch(1)
 
         layout = QVBoxLayout(self)
+        layout.addSpacing(8)
         layout.addLayout(art_row)
+        layout.addSpacing(16)
         layout.addWidget(self.track_label)
+        layout.addSpacing(12)
         layout.addLayout(controls)
-        layout.addWidget(self.progress_widget)
+        layout.addSpacing(8)
+        layout.addLayout(progress_row)
 
         self.play_button.clicked.connect(self._on_play_clicked)
         self.prev_button.clicked.connect(self.prev_clicked.emit)
@@ -103,10 +130,17 @@ class DeckView(QWidget):
 
     def load_item(self, item: Item) -> None:
         # 载入物品：形态/封面（RecordWidget 全量重绘，无封面不残留旧图）+ 面按钮 + 首曲标题；
-        # H2 类型级转速注入 + H4 面内寻曲状态复位
+        # H2 类型级转速注入 + H4 面内寻曲状态复位 + PL002 唱机形态/封面切换
         self._item = item
         self.record_widget.set_item(item)
         self.deck_widget.set_spin_ms(item.type.spin_ms_per_rev)
+        cover_pixmap: QPixmap | None = None
+        cover = resolve_cover(item)
+        if cover and Path(cover).is_file():
+            pixmap = QPixmap(cover)
+            if not pixmap.isNull():
+                cover_pixmap = pixmap
+        self.deck_widget.set_item_type(item.type.key, cover_pixmap)
         self._side_offset = None
         self._side_total = None
         self._last_duration_ms = 0

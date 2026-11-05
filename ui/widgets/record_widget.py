@@ -1,7 +1,6 @@
 # 物品拟物绘制（A12.1）：按 ItemType.shape 绘制形态（circle 黑胶/CD、rect 磁带盒），渐变+阴影质感
-# H6 磁带动画：卷轴随播放旋转（恒线速模型 + 带卷胀缩），仅唱机实例驱动（置物架卡片保持静态）
+# H6/PL002.1 磁带动画：卷轴随播放旋转（恒线速模型 + 带卷胀缩），仅唱机实例驱动（置物架卡片保持静态）
 
-import math
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, QTimer
@@ -18,6 +17,7 @@ from PySide6.QtWidgets import QWidget
 from config.static.static_config import get_static_config
 from modules.cover.providers import resolve_cover
 from modules.items.model import Item
+from ui.widgets.parts import REEL_RADIUS_MAX, REEL_RADIUS_MIN, draw_reel, reel_factor
 
 # 静态配置一次解包
 _SC = get_static_config()
@@ -25,8 +25,6 @@ _SC = get_static_config()
 # 卷轴动画常量（视觉常量豁免先例）：基准角速度（度/秒）按带卷半径因子衰减（恒线速拟真）
 _REEL_BASE_SPEED = 240.0  # 播放基准角速度（度/秒，除以半径因子）
 _REEL_WIND_SPEED = 900.0  # 快进/倒带角速度基准（度/秒，scrub 拖动时）
-_REEL_RADIUS_MIN = 44.0  # 带卷最小半径因子（空卷）
-_REEL_RADIUS_MAX = 77.0  # 带卷最大半径因子（满卷，Spun 卷带物理同源量纲）
 
 
 class RecordWidget(QWidget):
@@ -112,9 +110,8 @@ class RecordWidget(QWidget):
         # H6 动画帧：恒线速模型——角速度 = 基准 / 半径因子（卷多的盘转得慢，拟物物理）；
         # scrub 风向非零时覆盖基准速度（快进/倒带视觉）；角度取模累计
         dt = self._tick_ms / 1000.0
-        span = _REEL_RADIUS_MAX**2 - _REEL_RADIUS_MIN**2
-        factor_l = math.sqrt(_REEL_RADIUS_MIN**2 + span * (1.0 - self._reel_progress))
-        factor_r = math.sqrt(_REEL_RADIUS_MIN**2 + span * self._reel_progress)
+        factor_l = reel_factor(1.0 - self._reel_progress)
+        factor_r = reel_factor(self._reel_progress)
         base = (
             self._wind * _REEL_WIND_SPEED
             if abs(self._wind) > 0.01
@@ -220,11 +217,11 @@ class RecordWidget(QWidget):
         return path
 
     def _paint_reels(self, painter: QPainter, win: QRectF) -> None:
-        # H6 卷带绘制：两卷带圆（半径按带卷物理因子胀缩）+ 缠绕纹理 + 花键 hub（3 齿随角度旋转）
+        # H6/PL002.1 卷带绘制（共享 parts.draw_reel）：两卷带圆（半径按带卷物理胀缩）
         # + 底部走带路径细线；fill 左卷 = 1-进度、右卷 = 进度（播放推进左→右）
         r_max = win.height() * 0.44
-        r_min = r_max * (_REEL_RADIUS_MIN / _REEL_RADIUS_MAX)
-        span = _REEL_RADIUS_MAX**2 - _REEL_RADIUS_MIN**2
+        r_min = r_max * (REEL_RADIUS_MIN / REEL_RADIUS_MAX)
+        hub = r_min * 0.62
         centers = (
             QPointF(win.left() + win.width() * 0.25, win.center().y()),
             QPointF(win.left() + win.width() * 0.75, win.center().y()),
@@ -232,30 +229,10 @@ class RecordWidget(QWidget):
         fills = (1.0 - self._reel_progress, self._reel_progress)
         angles = (self._reel_angle_l, self._reel_angle_r)
         for center, fill, angle in zip(centers, fills, angles):
-            factor = math.sqrt(_REEL_RADIUS_MIN**2 + span * fill)
-            t = (factor - _REEL_RADIUS_MIN) / (_REEL_RADIUS_MAX - _REEL_RADIUS_MIN)
+            factor = reel_factor(fill)
+            t = (factor - REEL_RADIUS_MIN) / (REEL_RADIUS_MAX - REEL_RADIUS_MIN)
             radius = r_min + (r_max - r_min) * t
-            # 带卷体（深棕）+ 缠绕纹理（内圈细线）
-            painter.setPen(QPen(QColor("#5a4a3a"), 1))
-            painter.setBrush(QColor("#2e2620"))
-            painter.drawEllipse(center, radius, radius)
-            painter.setPen(QPen(QColor(90, 74, 58, 110), 1))
-            painter.drawEllipse(center, radius * 0.72, radius * 0.72)
-            painter.drawEllipse(center, radius * 0.50, radius * 0.50)
-            # hub（浅色花键盘）+ 3 齿（120° 分布，随卷轴角度旋转）
-            hub = r_min * 0.62
-            painter.setPen(QPen(QColor("#777777"), 1))
-            painter.setBrush(QColor("#d8d8d8"))
-            painter.drawEllipse(center, hub, hub)
-            painter.save()
-            painter.translate(center)
-            painter.rotate(angle)
-            painter.setBrush(QColor("#8a8a8a"))
-            painter.setPen(QPen(QColor("#666666"), 1))
-            for _ in range(3):
-                painter.rotate(120.0)
-                painter.drawRect(QRectF(-1.5, -hub, 3.0, hub * 0.85))
-            painter.restore()
+            draw_reel(painter, center, radius, hub, angle)
         # 走带路径（两卷下方横线，模拟带体路径）
         painter.setPen(QPen(QColor("#4a3f36"), 1))
         painter.drawLine(
