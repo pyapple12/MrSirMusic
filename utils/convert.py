@@ -15,6 +15,11 @@ def seconds_from_ms(ms: int | float) -> float:
     return float(ms) / 1000.0
 
 
+def ms_from_seconds(seconds: int | float) -> int:
+    # 秒 → 毫秒（int，负值钳 0）：setPosition 等消费点的唯一换算入口（FIX006.12 收敛）
+    return max(0, int(seconds * 1000))
+
+
 def progress_percent(position_ms: int, duration_ms: int) -> int:
     # 进度百分比换算（钳制 0-100，D0.3 下界；总时长 0/非正返回 0）：进度显示唯一实现（B1.4 去重）
     if duration_ms <= 0:

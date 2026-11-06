@@ -61,17 +61,18 @@ class ProgressWidget(QWidget):
         self.scrub_released.emit(self.bar.value())
 
     def on_progress(self, position_ms: int, duration_ms: int) -> None:
-        # PROGRESS 驱动：更新滑条值与时间文本；scrub 中挂起滑条回写（时间文本仍刷新——
-        # 拖动结束后值域一致，不产生视觉跳变）；百分比 0-100 缩放到滑条 0-1000 值域
+        # PROGRESS 驱动：更新滑条值与时间文本；scrub 中两者均挂起——滑条位与时间文本
+        # 由拖动预览独占（FIX006.6：否则文本每秒在预览值/真实值间跳变）；
+        # 总时长仍记录（预览换算源）；百分比 0-100 缩放到滑条 0-1000 值域
         if duration_ms > 0:
             self._duration_seconds = duration_ms / 1000.0
         if not self._scrubbing:
             self.bar.setValue(
                 progress_percent(position_ms, duration_ms) * (_SLIDER_MAX // 100)
             )
-        self._time.setText(
-            f"{format_duration(position_ms / 1000)} / {format_duration(duration_ms / 1000)}"
-        )
+            self._time.setText(
+                f"{format_duration(position_ms / 1000)} / {format_duration(duration_ms / 1000)}"
+            )
 
 
 # ===== ui/widgets/progress_widget.py 类/函数说明 =====

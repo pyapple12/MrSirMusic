@@ -5,7 +5,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from modules.cover.providers import COVERS_DIR, CoverProvider
+from modules.cover.base import COVERS_DIR, CoverProvider
 from modules.items.model import Item
 
 
@@ -48,4 +48,4 @@ class LocalProvider(CoverProvider):
 # LocalProvider(CoverProvider): 本地提供器
 #   get_cover(item): cover_path 有效（文件存在）则返回；否则 None
 #   设计理由：UUID 命名避免文件名冲突；写回路径供持久化（A6 items.cover_path 列）
-#   关联配置：COVERS_DIR（providers.py，base.json music_dir 装配）
+#   关联配置：COVERS_DIR（cover/base.py，FIX006.14 断环下沉）

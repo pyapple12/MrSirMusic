@@ -170,6 +170,28 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL003.5 快捷键 —— `ui/main_window.py` `_wire_shortcuts()`：三项 QShortcut（空格 → deck_view._on_play_clicked、← → play_prev、→ → play_next、F → flip，WindowShortcut）；`deck_view.py` 播放控制四按钮 setFocusPolicy(NoFocus)；验证：a11 追加真音频链路 QTest.keyClick 断言（空格 playing↔paused 翻转）+ NoFocus 断言过（2026-11-05 已验证；调试修一处窗口未激活导致快捷键不派发——探针补 show+activateWindow）
 - [x] PL003.6 PL003 收口 —— `base.json` → 0.1.4、README 徽章 0.1.4 + 快捷键表、a1 断言同步；全量 14 探针 PASS + 冒烟 + --version 0.1.4 + 全套截图终审（读图）；草拟 commit 交用户；真机核对三项（中文排版层级 / 高 DPI 清晰度 / 拖拽视觉反馈）留待用户日常使用复核（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.4）
 
+### FIX006: 第 6 轮审计修复 [audit#A006] ✅
+
+> 结果：16 条 P 级（P2×4 + P3×12）全部落地；全量 14 探针 PASS + --version 0.1.4；反向验收逐条对照原问题（0 容量重刻被拦 / pending 清理 / 缺失切换 stopped / 切档底噪恢复 / 定时器自停 / scrub 冻结均已断言）。来源 z.plan.md 附录 A006。**播放计数链按默认决策移除**（用户未另行拍板），决策备忘登记 y.problem.md P3。
+
+- [x] FIX006.1 [P2] regenerate 空物品入库/静默丢歌 —— placed 计数检查 + check_item 拦截（与 generate 主流程同口径）+ `_regenerate_item` 捕获 GenerateError 提示（2026-11-05 已验证：a8 断言 0 容量/容量缩水重刻均 GenerateError 且库零新行）
+- [x] FIX006.2 [P2] _pending_seek 错误链残留 —— `_on_player_error` 补清 pending（2026-11-05 已验证：a9 断言 error 后 pending 为 None）
+- [x] FIX006.3 [P2] 手动切缺失曲发声错位 —— missing 分支补 player.stop() + _emit_state("stopped")（E2.1 语义保持）（2026-11-05 已验证：a9 真音频 playing 切缺失曲 → stopped）
+- [x] FIX006.4 [P2] set_level 底噪不恢复 —— 补 elif intensity>0 and _active → _start_ambience()（2026-11-05 已验证：a13 断言 concise→realistic 播放中底噪恢复）
+- [x] FIX006.5 [P3] 拖针定时器空转 —— _tick 收敛自停（2026-11-05 已验证：a12 取消松手归位后 isActive False）
+- [x] FIX006.6 [P3] scrub 时间文本跳变 —— on_progress 全量挂起（滑条+文本）+ 注释如实化（2026-11-05 已验证：a12 scrub 中文本冻结断言）
+- [x] FIX006.7 [P3] 容错登记制补登记 —— AGENTS 补 6 条三要素登记 + delete.py 两处告警 + deck_widget/record_widget 回退告警 + progress.py 说明区 QTimer 特许声明（2026-11-05 已验证：登记与代码一一对应 + 冒烟）
+- [x] FIX006.8 [P3] item_types shape 校验 —— 记录级校验提取 `_sanitize_item_types()` 独立函数（探针可单测）+ shape ∈ {circle,rect} 非法移除记录（2026-11-05 已验证：a1 断言坏 shape 三形态移除、合法保留）
+- [x] FIX006.9 [P3] 磁带常量漂移 —— REEL_BASE_SPEED 入 parts 单源 + deck 侧 44/77 内联改引 parts 常量（2026-11-05 已验证：a12 卷轴断言原样过）
+- [x] FIX006.10 [P3] 置物架缩略图走配置 —— ui.json 增 shelf_thumbnail_size=56 + 白名单补键 + shelf_view 改读配置（2026-11-05 已验证：a11 回归过）
+- [x] FIX006.11 [P3] load_item 首曲缺失预检 —— setSource 前 is_missing 预检发 file_missing 中文分类（2026-11-05 已验证：a9 断言 ERROR category == file_missing）
+- [x] FIX006.12 [P3] 秒→毫秒收敛 —— convert 增 ms_from_seconds（负值钳 0）+ engine×2/progress 改引（2026-11-05 已验证：a2 四边界断言）
+- [x] FIX006.13 [P3] 死代码清理 —— 删 Side.remove_track/factory.remove_track/capacity.remaining_seconds/repository.load_item（保留为仓储完备 API 并注明，a6 回环依赖）/DEFAULT_REALISM_LEVEL 死 import×2；播放计数链按默认决策移除写链（update_item 去 play_count 写回，列保留读兼容）+ 决策备忘 y.problem.md P3（2026-11-05 已验证：grep 零引用 + a3/a6/a8 回归）
+- [x] FIX006.14 [P3] import 纪律 —— delete.py 延迟 import 提升 + cover 基座下沉 modules/cover/base.py 断环（providers re-export 兼容既有导入路径）（2026-11-05 已验证：a7/a8 回归 + 冒烟含 cover.base）
+- [x] FIX006.15 [P3] 文档一致性 —— AGENTS 版本句删时点快照、main.py 改三段式口径、代码注释 H 编号对齐 x.progress（H0.3→H0.2/H0.6→H0.3）（2026-11-05 已验证：grep 无四段式残留 + 编号对齐）
+- [x] FIX006.16 [P3] toggle_play 公开化 —— deck_view.toggle_play() + 快捷键改调（2026-11-05 已验证：a11 快捷键断言原样过）
+- [x] FIX006.17 验证收尾 —— 全量 14 探针 PASS + 冒烟 + --version 0.1.4 + 反向验收逐条对照原问题（见各组注记）；探针回归曾红灯一次（static_config setattr 缩进回归致全分类空），修复后绿灯——红灯证据留存于会话（2026-11-05 已验证：全量 14/14 PASS，版本三方一致 0.1.4）
+
 ## 未完成
 
-（暂无条目——PL001-PL003 已全部完成，下一批方案走 plan-task 流程立项）
+（暂无条目——FIX006 已收官，下一批方案走 plan-task 流程立项）

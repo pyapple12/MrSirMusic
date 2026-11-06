@@ -79,14 +79,6 @@ class Side:
         # 追加曲目（容量校验由上层 add_track_to_side 负责，本方法仅追加）
         self.tracks.append(track)
 
-    def remove_track(self, track_id: str) -> bool:
-        # 按曲目 id（path）移除，找到并移除返回 True，未找到返回 False
-        for i, t in enumerate(self.tracks):
-            if t.path == track_id:
-                del self.tracks[i]
-                return True
-        return False
-
 
 @dataclass
 class Item:
@@ -116,9 +108,8 @@ class Item:
         # 按面 label 取 Side（不存在返回 None）
         return self.sides.get(label)
 
-    def bump_play_count(self) -> None:
-        # 播放次数 +1（拟物唱机播放时调用）
-        self.play_count += 1
+    # FIX006.13（A006-P3-⑨）：bump_play_count 已移除——全链零写入点（播放计数恒 0），
+    # play_count 字段与 items.play_count 列保留（读兼容，schema 不动）；决策备忘见 y.problem.md P3
 
 
 # ===== modules/items/model.py 类/方法说明 =====

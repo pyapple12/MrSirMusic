@@ -21,6 +21,7 @@ _NUMERIC_UI_KEYS = (
     "window_width",
     "window_height",
     "thumbnail_size",
+    "shelf_thumbnail_size",
     "record_widget_size",
     "deck_widget_size",
     "spin_tick_ms",
@@ -170,6 +171,65 @@ def _sanitize_types(
     return result
 
 
+def _sanitize_item_types(data: dict[str, Any]) -> dict[str, Any]:
+    # item_types 记录级校验（E0.6/F0.5/F1.1/H2/FIX006.8）：值全 dict + 记录内字段逐项校验，
+    # 非法移除记录（minutes_per_side/side/shape）或移除键（spin_ms_per_rev 可选键）
+    result = _sanitize_types(data, values_must_be_dict=True)
+    for type_key, rec in list(result.items()):
+        if not isinstance(rec, dict):
+            continue
+        mp = rec.get("minutes_per_side")
+        if (
+            mp is None
+            or (type(mp) is not int and not isinstance(mp, float))
+            or mp <= 0
+        ):
+            # F1.1：minutes_per_side >0 下界（0 容量 → 生成静默失效）
+            _logger.warning(
+                "载体类型记录数值非法（已移除）: %s.minutes_per_side = %r",
+                type_key,
+                mp,
+            )
+            result.pop(type_key, None)
+            continue
+        sides = rec.get("side")
+        if (
+            not isinstance(sides, list)
+            or not sides
+            or not all(s in ("A", "B") for s in sides)
+        ):
+            _logger.warning(
+                "载体类型记录 side 非法（已移除）: %s.side = %r",
+                type_key,
+                sides,
+            )
+            result.pop(type_key, None)
+            continue
+        # FIX006.8（A006-P3-④）：shape 校验——坏形态存活会致唱机静默按黑胶绘制（语义错乱），与 side 同法移除
+        shape = rec.get("shape")
+        if not isinstance(shape, str) or shape not in ("circle", "rect"):
+            _logger.warning(
+                "载体类型记录 shape 非法（已移除）: %s.shape = %r",
+                type_key,
+                shape,
+            )
+            result.pop(type_key, None)
+            continue
+        # H2：spin_ms_per_rev 可选数值键（>0 下界），非法移除键保留记录（from_config 回退默认）
+        spin = rec.get("spin_ms_per_rev")
+        if spin is not None and (
+            (type(spin) is not int and not isinstance(spin, float))
+            or spin <= 0
+        ):
+            _logger.warning(
+                "载体类型记录 spin_ms_per_rev 非法（已移除键，回退默认）: %s = %r",
+                type_key,
+                spin,
+            )
+            rec.pop("spin_ms_per_rev", None)
+    return result
+
+
 def _load_static_config() -> StaticConfig:
     # 私有加载：读引导映射表 → 按四分类逐个加载 → 类型校验 → 聚合；映射缺失键对应分类置空 dict 并告警
     mapping = _read_json("config.json")
@@ -217,50 +277,7 @@ def _load_static_config() -> StaticConfig:
                     )
                     data.pop("default_level", None)
             elif key == "item_types":
-                data = _sanitize_types(data, values_must_be_dict=True)
-                # E0.6/F0.5：记录内字段校验（minutes_per_side 数值、side list 且元素 ∈ A/B），非法移除记录
-                for type_key, rec in list(data.items()):
-                    if not isinstance(rec, dict):
-                        continue
-                    mp = rec.get("minutes_per_side")
-                    if (
-                        mp is None
-                        or (type(mp) is not int and not isinstance(mp, float))
-                        or mp <= 0
-                    ):
-                        # F1.1：minutes_per_side >0 下界（0 容量 → 生成静默失效）
-                        _logger.warning(
-                            "载体类型记录数值非法（已移除）: %s.minutes_per_side = %r",
-                            type_key,
-                            mp,
-                        )
-                        data.pop(type_key, None)
-                        continue
-                    sides = rec.get("side")
-                    if (
-                        not isinstance(sides, list)
-                        or not sides
-                        or not all(s in ("A", "B") for s in sides)
-                    ):
-                        _logger.warning(
-                            "载体类型记录 side 非法（已移除）: %s.side = %r",
-                            type_key,
-                            sides,
-                        )
-                        data.pop(type_key, None)
-                        continue
-                    # H2：spin_ms_per_rev 可选数值键（>0 下界），非法移除键保留记录（from_config 回退默认）
-                    spin = rec.get("spin_ms_per_rev")
-                    if spin is not None and (
-                        (type(spin) is not int and not isinstance(spin, float))
-                        or spin <= 0
-                    ):
-                        _logger.warning(
-                            "载体类型记录 spin_ms_per_rev 非法（已移除键，回退默认）: %s = %r",
-                            type_key,
-                            spin,
-                        )
-                        rec.pop("spin_ms_per_rev", None)
+                data = _sanitize_item_types(data)
             setattr(result, key, data)
         else:
             _logger.warning("静态配置映射缺少分类: %s", key)
@@ -293,6 +310,9 @@ def get_static_config() -> StaticConfig:
 #                 valid_values, values_must_be_dict) -> dict: B2.4-C0.5-D0.1-E0.x 类型校验
 #   逻辑：数值/字符串/字典/列表白名单 + 嵌套数值（>0 下界与长度契约）+ 值域 + 值全 dict 校验，
 #     非法（含 null）→ 移除键 + 告警（消费点回退默认，不崩溃）
+# _sanitize_item_types(data) -> dict: item_types 记录级校验（E0.6/F0.5/F1.1/H2/FIX006.8）
+#   逻辑：值全 dict → 记录内 minutes_per_side/side/shape 逐项校验（非法移除记录）+
+#     spin_ms_per_rev 可选键校验（非法移除键）；提取为独立函数供探针直接单测（FIX006.8）
 # _load_static_config() -> StaticConfig: 私有加载
 #   逻辑：读 config.json 映射表 → 四分类加载 → 各自类型校验（base 值域、ui 嵌套、
 #     effects default_level 值域 E0.7、item_types 记录内数值 E0.6 + spin_ms_per_rev H2）→ 聚合

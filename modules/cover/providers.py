@@ -1,27 +1,10 @@
-# 封面提供器注册表（A7.1/B3.9）：CoverProvider 基类 + 名称→实例注册表，按 item.cover_source 解析
+# 封面提供器注册表（A7.1/B3.9）：名称→实例注册表，按 item.cover_source 解析
+# （FIX006.14：基类与 COVERS_DIR 下沉 cover/base.py 断环；此处 re-export 保持既有导入路径兼容）
 
-from abc import ABC, abstractmethod
-from pathlib import Path
 from threading import Lock
 
-from config.static.static_config import get_static_config
+from modules.cover.base import COVERS_DIR, CoverProvider  # noqa: F401 (re-export)
 from modules.items.model import Item
-
-# 封面实体目录（music/covers/，music_dir 来自 base.json）
-COVERS_DIR = (
-    Path(__file__).resolve().parent.parent.parent
-    / get_static_config().base.get("music_dir", "music")
-    / "covers"
-)
-
-
-class CoverProvider(ABC):
-    # 封面提供器基类：get_cover(item) 返回本地封面路径或 None（无封面时由占位图兜底）
-
-    @abstractmethod
-    def get_cover(self, item: Item) -> str | None:
-        # 抽象方法：按 item 返回封面本地路径（子类实现）
-        raise NotImplementedError
 
 
 # 注册表缓存（懒装配，B3.9 加锁防并发首调竞态）
@@ -60,11 +43,11 @@ def resolve_cover(item: Item) -> str | None:
 
 
 # ===== modules/cover/providers.py 函数/常量说明 =====
-# COVERS_DIR: 封面实体目录（music/covers/，music_dir 来自 base.json；gitignore 内容保留目录）
-# CoverProvider(ABC): 提供器基类（get_cover 抽象方法，返回本地路径或 None）
+# COVERS_DIR / CoverProvider: 自 cover/base.py re-export（FIX006.14 断环；既有 from providers import 兼容）
 # _registry: 注册表缓存（None=未装配，懒构建）
 # _build_registry() -> dict: 装配 local/placeholder；network 预留位注释（z.plan 留接口未实现）
 # get_provider(name) -> CoverProvider | None: 按名取实例（懒装配）
 # resolve_cover(item) -> str | None: 按 cover_source 解析封面（provider 缺失 → None）
-#   设计理由：注册表模式让新封面源 = 加一个 provider 类 + 注册一行（对齐解码器注册表思路）
-#   关联配置：COVERS_DIR 由 base.json music_dir 装配
+#   设计理由：注册表模式让新封面源 = 加一个 provider 类 + 注册一行（对齐解码器注册表思路）；
+#     基座（基类/目录常量）在 cover/base.py，本模块只管注册表装配（FIX006.14）
+#   关联配置：COVERS_DIR 由 base.json music_dir 装配（装配逻辑在 cover/base.py）

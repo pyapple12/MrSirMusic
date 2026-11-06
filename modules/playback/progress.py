@@ -6,6 +6,7 @@ from config.static.static_config import get_static_config
 from modules.playback.engine import PlaybackEngine
 from modules.playback.event_bus import emit, subscribe
 from modules.playback.events import PLAYBACK_STATE, PROGRESS, ProgressPayload
+from utils.convert import ms_from_seconds
 
 # 静态配置一次解包（进度上报间隔外置，B2.9）
 _SC = get_static_config()
@@ -48,7 +49,7 @@ class ProgressReporter:
         if duration_ms <= 0:
             track = self.engine.current_track()
             if track is not None:
-                duration_ms = int(track.duration_seconds * 1000)
+                duration_ms = ms_from_seconds(track.duration_seconds)
         emit(
             PROGRESS,
             ProgressPayload(
@@ -66,10 +67,13 @@ class ProgressReporter:
 
 # ===== modules/playback/progress.py 类/函数说明 =====
 # ProgressReporter: 进度上报（1s 定时器 + 结束协调）
-#   __init__(engine, timer_interval_ms): QTimer 创建 + PLAYBACK_STATE 订阅
+#   __init__(engine, timer_interval_ms): QTimer 创建 + PLAYBACK_STATE 订阅；
+#     QTimer 函数内延迟导入为 modules 层特许例外（A9.7 定案：modules 禁 Qt 类型，
+#     QTimer 为唯一上报驱动件；与 engine 的 QtMultimedia 特许同性质，FIX006.7 补登记）
 #   start()/stop(): 定时器启停（播放/暂停联动由调用方控制）
 #   shutdown(): 停定时器 + 退订（生命周期管理，防悬挂回调）
-#   _report(): PROGRESS 事件（position_ms + duration_ms；duration 来自 Track.duration_seconds）
+#   _report(): PROGRESS 事件（position_ms + duration_ms；duration 优先播放器、标签值经
+#     utils.convert.ms_from_seconds 兜底换算）
 #   _on_state(payload): ended → engine.play_next()（失败 → engine.stop()）
 #   设计理由：定时器事件循环驱动（1s 节流，非必要不频繁刷新——AGENTS.md 节流约定）
 #   关联配置：定时器间隔走 ui.json progress_interval_ms（B2.9 外置）

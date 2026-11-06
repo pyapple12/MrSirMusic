@@ -38,4 +38,12 @@
 
 ## 待评估 / 待实施
 
-（暂无条目）
+3. **播放计数功能决策（写链已移除）**（2026-11-06 📌 待评估）：
+
+当前问题：`Item.play_count` 字段与 `items.play_count` 列自 A6 建成起全链零写入点（播放计数恒 0，详情面板恒显示"播放次数：0"）。FIX006.13（A006-P3-⑨）按默认决策移除了死写链（bump_play_count 方法 + update_item 的 play_count 写回）；字段与列保留读兼容（schema 不动）。
+
+未来方案：
+
+- 方案 A（补接线）：若"播放计数"属产品承诺功能——`engine` 播放自然结束（ended）或手动切曲完成时 `item.play_count += 1` + `update_item`；需 engine 持有 Item 引用或经事件携带 item_id 回写
+- 方案 B（彻底移除）：删 items.play_count 列（需迁移 v2）+ Item.play_count 字段 + 详情面板"播放次数"行
+- 当前状态：写链已删、读链保留、功能冻结恒 0；详情面板的"播放次数"行随之失去意义，待方案拍板时一并处理

@@ -17,13 +17,22 @@ from PySide6.QtWidgets import QWidget
 from config.static.static_config import get_static_config
 from modules.cover.providers import resolve_cover
 from modules.items.model import Item
-from ui.widgets.parts import REEL_RADIUS_MAX, REEL_RADIUS_MIN, draw_reel, reel_factor
+from ui.widgets.parts import (
+    REEL_BASE_SPEED,
+    REEL_RADIUS_MAX,
+    REEL_RADIUS_MIN,
+    draw_reel,
+    reel_factor,
+)
+from utils.logger import get_logger
 
 # 静态配置一次解包
 _SC = get_static_config()
 
-# 卷轴动画常量（视觉常量豁免先例）：基准角速度（度/秒）按带卷半径因子衰减（恒线速拟真）
-_REEL_BASE_SPEED = 240.0  # 播放基准角速度（度/秒，除以半径因子）
+# 模块日志（FIX006.7：未知形态回退告警——容错登记制条目⑥可观测）
+_logger = get_logger("ui.record_widget")
+
+# 卷轴动画常量（视觉常量豁免先例）：基准速度走 parts.REEL_BASE_SPEED 单源（FIX006.9）
 _REEL_WIND_SPEED = 900.0  # 快进/倒带角速度基准（度/秒，scrub 拖动时）
 
 
@@ -61,11 +70,14 @@ class RecordWidget(QWidget):
 
     def set_item(self, item: Item) -> None:
         # 换物品：先清空封面（C0.3 防旧封面残留）→ 重新加载有效封面 → 重绘；
-        # H6 换物品复位卷轴动画状态（进度/风向归零）
+        # H6 换物品复位卷轴动画状态（进度/风向归零）；
+        # FIX006.7：未知形态（∉ circle/rect）告警一次（容错登记制条目⑥；绘制兜底 circle）
         self._item = item
         self._cover = None
         self._reel_progress = 0.0
         self._wind = 0.0
+        if item.type.shape not in ("circle", "rect"):
+            _logger.warning("未知载体形态（按黑胶绘制兜底）: %s", item.type.shape)
         cover = resolve_cover(item)
         if cover and Path(cover).is_file():
             pixmap = QPixmap(cover)
@@ -115,7 +127,7 @@ class RecordWidget(QWidget):
         base = (
             self._wind * _REEL_WIND_SPEED
             if abs(self._wind) > 0.01
-            else _REEL_BASE_SPEED
+            else REEL_BASE_SPEED
         )
         self._reel_angle_l = (self._reel_angle_l - dt * base / factor_l) % 360.0
         self._reel_angle_r = (self._reel_angle_r - dt * base / factor_r) % 360.0

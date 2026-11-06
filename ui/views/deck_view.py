@@ -166,6 +166,10 @@ class DeckView(QWidget):
         else:
             self.track_label.setText("（空物品）")
 
+    def toggle_play(self) -> None:
+        # 公开播放/暂停切换入口（FIX006.16：快捷键等外部调用方走此公开方法，不触私有）
+        self._on_play_clicked()
+
     def _on_play_clicked(self) -> None:
         # 播放按钮：按显式状态字段分发（B0.11，不依赖按钮文本回读）
         if self._playing:

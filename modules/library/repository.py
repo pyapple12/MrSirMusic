@@ -167,7 +167,8 @@ def load_all() -> list[Item]:
 
 
 def load_item(item_id: str) -> Item | None:
-    # 单物品加载（含 tracks）；不存在返回 None
+    # 单物品加载（含 tracks）；不存在返回 None。
+    # FIX006.13：UI 消费走 load_all，本方法保留为仓储完备 API（a6 探针 CRUD 回环验证依赖）
     conn = _connect()
     try:
         row = conn.execute("SELECT * FROM items WHERE id=?", (item_id,)).fetchone()
@@ -193,11 +194,12 @@ def delete_item(item_id: str) -> None:
 
 
 def update_item(item: Item) -> None:
-    # 更新 items 行字段（name/tag/cover/play_count 等），不动 tracks（与 save_item 区分）
+    # 更新 items 行字段（name/tag/cover），不动 tracks（与 save_item 区分）；
+    # FIX006.13：play_count 不再写回（bump 链已移除，列保留读兼容——决策备忘 y.problem.md P3）
     conn = _connect()
     try:
         conn.execute(
-            """UPDATE items SET name=?, type=?, cover_source=?, cover_path=?, tag=?, play_count=?
+            """UPDATE items SET name=?, type=?, cover_source=?, cover_path=?, tag=?
                WHERE id=?""",
             (
                 item.name,
@@ -205,7 +207,6 @@ def update_item(item: Item) -> None:
                 item.cover_source,
                 item.cover_path,
                 item.tag,
-                item.play_count,
                 item.id,
             ),
         )

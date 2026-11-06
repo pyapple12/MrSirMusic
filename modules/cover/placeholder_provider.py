@@ -1,7 +1,7 @@
 # 占位封面提供器（A7.3/B2.1）：无封面时返回 data/placeholder.png（缓存兜底，不显示空白）
 
 from config.static.static_config import get_static_config
-from modules.cover.providers import CoverProvider
+from modules.cover.base import CoverProvider
 from modules.items.model import Item
 from utils.paths import project_root
 

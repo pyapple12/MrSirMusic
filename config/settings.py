@@ -5,11 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from config.static.static_config import (
-    DEFAULT_REALISM_LEVEL,
-    _fallback_level,
-    get_static_config,
-)
+from config.static.static_config import _fallback_level, get_static_config
 from utils.logger import get_logger
 from utils.paths import project_root
 

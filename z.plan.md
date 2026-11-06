@@ -363,3 +363,19 @@ Track: path / title / artist / album / duration(秒) / format
 **明确不做**：深浅色双主题跟随（Windows 桌面常驻场景单一深色已够，双主题进 y.problem 备忘）；自定义皮肤体系。
 
 **实施与证据**：逐条做法与验证见 x.progress.md「PL003」组；收口时真机核对三项（中文排版层级 / 高 DPI 清晰度 / 拖拽视觉反馈）交用户。
+
+## 附录 A006：全量代码审计报告（第6轮，2026-11-05）
+
+> 范围：main.py + config/modules/ui/utils 全部 .py + 5 个静态 json；三路并行只读代理（modules 核心 / playback / UI+入口+配置）+ 交叉汇总去重；P 级证据经主会话抽查坐实；探针体系（14/14 PASS）为行为事实源
+> 方式：逐文件全文阅读 + 回归复核（A005/F 系列 15 项 + G/H/PL 批次抽查，git show 双核对）+ 13 维度对照
+> 结果：**P 级 16 条（P2 4 / P3 12，无 P0/P1）/ 参考级观察项 30 条（全部维持豁免，其中需产品定案 2、需 Qt 行为验证 3）**
+> 状态：✅ 已修复（2026-11-05：FIX006 共 17 条全部落地——16 条 P 级 + 验证收尾；全量 14 探针 PASS + --version 0.1.4；反向验收逐条对照原问题；任务清单见 x.progress.md FIX006）
+> 编号备注：本轮起启用 FIX 三位轨道，历史无 FIX 组——默认 max+1 应为 FIX001，用户裁决对齐轮次取 A006/FIX006（记录该次例外）
+
+- **零、上轮修复复核**：A005/F 系列 15 项全部 ✅ 在位（三路 grep + `git show 5ab69ca`/`30f5348` 双核对）；G/H/PL 批次抽查（G0.1-G0.3/G2.1/G3.1-G3.2、H0.1-H0.6/H1、PL001-003 关键修复）全部 ✅；零回退零漏改；勘误——30f5348 实为 E 系列（第 4 轮），F 系列 = 5ab69ca
+- **一、P0-P3（16 条）**：
+  - **P2 4**——① regenerate 缺 G0.2/F2.1 等价保护（0 容量类型物品重新刻录 → 空物品入库；minutes_per_side 调小 → 静默丢歌无提示）；② engine `_pending_seek` 错误链残留（errorOccurred 不清 pending → 旧偏移应用在后续错误曲目上）；③ 手动切缺失曲发声错位（missing 分支不 stop 旧媒体不发状态，UI 展示切曲但扬声器继续放旧曲；自动链无此问题）；④ 播放中切拟真档位底噪不恢复（sounds.set_level 仅 >0 时调音量不重启底噪，concise→refined 静音至下次态迁移）
+  - **P3 12**——① 拖针收尾定时器永久空转（30ms 空重绘，常见路径）；② scrub 拖动中时间文本预览/真实跳变 + 注释失实；③ 容错登记制补登记 6 处（delete 封面查询静默 True 与 unlink 静默 pass、migration 版本读取归 0、H1 面内时长缺失降级 ×2、未知形态回退 vinyl/circle ×2、progress 函数内 QTimer 特许例外）；④ item_types 缺 shape ∈ {circle,rect} 校验（坏 shape 静默按黑胶绘制）；⑤ 磁带物理常量三处漂移（基准速度双份 + deck 侧半径界值内联，PL002 DRY 执行不彻底）；⑥ 置物架缩略图 56×56 硬编码未走 ui.json（thumbnail_size 契约旁置）；⑦ load_item 首曲缺失走 Qt 泛化英文错误（play 路径为 file_missing 中文——分类漂移）；⑧ 秒→毫秒 `int(x*1000)` 三处散布（convert 已有反向函数）；⑨ 死代码组（Side.remove_track/factory.remove_track（F2.1 连带）/remaining_seconds/repository.load_item/DEFAULT_REALISM_LEVEL 死 import×2/**bump_play_count 全链零写入点（播放计数恒 0——接线或移除需拍板）**）；⑩ import 纪律（delete 函数内延迟 import 无依据 + cover 包循环依赖无例外说明）；⑪ 文档一致性组（AGENTS"当前机器版本 0.1.1"过期 / main.py 仍写四段式 / H 系列编号代码注释与 x.progress 错位）；⑫ 快捷键跨类调用 `deck_view._on_play_clicked()` 私有方法
+  - **需产品定案（观察项内，不占编号）**：空 A 面 + B 有曲物品可生成（generate_check 不拦，F3.1 语义边界）；播放计数是否属第一版承诺功能（与⑨联动）
+- **二、参考级观察项 30 条**（全部维持豁免；摘要分类）：需 Qt 行为验证 3（seek_side(1.0) 曲末 EndOfMedia、LoadedMedia 回调内 setPosition、键盘操作滑条残留 wind）；设计使然/已文档化 8（EndOfMedia 回调链 setSource+日志、auto_flip 载入快照、空闲期每秒 PROGRESS(0)、容量双实现刻意同口径、queue.prev 不复位 flipped（A005 遗留）、created_at 同秒排序、embedded_cover 预留、decoder 占位零消费）；性能可接受 6（repository 每操作建连、paintEvent 每帧渐变、mark_missing 逐曲 stat、库列表重读封面、_ensure_player 幂等、rogue Side 已告警）；纯理论/轻微 13（mid-session 删库缓存、edit 回滚无日志、event_bus id() 碰撞、registry 误命中、probe 误判（A005 已登记）、空态拖针文案、载入后进度残留、dnd 损坏 mime、save_config 回调未净化、_round_rect_path 内层 import、新载体键需同步 deck_widget 分支（契约提示）、registry.default_level 仅探针消费、deck_widget 空态事件防护（需桥空态发事件才可达））
+- **三、亮点**：A005 全部修复 + G/H/PL 三大批次关键修复零回退零漏改（三路独立 git show 双核对）；容错登记制首次存量盘点即产出（P3 制度生效证据）；三路交叉勘误上轮提交号（30f5348=E 系列 vs F=5ab69ca）；playback 主链走查无确定性缺陷；版本三方一致（0.1.4）

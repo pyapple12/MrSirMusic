@@ -10,10 +10,12 @@ from PySide6.QtWidgets import (
     QMenuBar,
     QLabel,
     QInputDialog,
+    QMessageBox,
 )
 
 from config.settings import add_change_listener, load_config
 from config.static.static_config import get_static_config
+from modules.generator.generator import GenerateError
 from modules.items.model import Item
 from modules.library.path_check import mark_missing
 from modules.library.repository import load_all
@@ -145,8 +147,9 @@ class MainWindow(QMainWindow):
             self._shortcuts.append(shortcut)
 
     def _on_shortcut_play_pause(self) -> None:
-        # 空格：按唱机视图当前态分发（与播放按钮同路由语义，B0.11 状态字段分发）
-        self.deck_view._on_play_clicked()
+        # 空格：按唱机视图当前态分发（与播放按钮同路由语义，B0.11 状态字段分发）；
+        # FIX006.16：走公开 toggle_play（不跨类调私有方法）
+        self.deck_view.toggle_play()
 
     def _apply_realism(self, level: str) -> None:
         # 应用拟真度档位到唱机控件（效果器叠加 + 动画开关；B0.4 档位接线）+ 音效响度（H3）
@@ -169,11 +172,16 @@ class MainWindow(QMainWindow):
             self.refresh_library(load_all())
 
     def _regenerate_item(self, item_id: str) -> None:
-        # 重新刻录：复用原歌池生成新 id 物品 → 刷新（E3.1 顶层 import）
+        # 重新刻录：复用原歌池生成新 id 物品 → 刷新（E3.1 顶层 import）；
+        # FIX006.1 配套：GenerateError（容量不足丢弃/校验未通过）→ 分类提示不炸槽
         item = next((i for i in self._items if i.id == item_id), None)
         if item is None:
             return
-        regenerate_item(item)
+        try:
+            regenerate_item(item)
+        except GenerateError as exc:
+            QMessageBox.warning(self, "重新刻录", str(exc))
+            return
         self.refresh_library(load_all())
 
     def _delete_item(self, item_id: str) -> None:
@@ -270,7 +278,7 @@ class MainWindow(QMainWindow):
         self.shelf_view.set_items(items)
 
     def closeEvent(self, event) -> None:
-        # 关闭清理：停引擎（H0.6：关闭瞬间音频仍在路由，先停保证即时静音）+ 停上报器 + 退订桥
+        # 关闭清理：停引擎（H0.3：关闭瞬间音频仍在路由，先停保证即时静音）+ 停上报器 + 退订桥
         self.engine.stop()
         self.reporter.shutdown()
         self.bridge.shutdown()
@@ -293,5 +301,5 @@ class MainWindow(QMainWindow):
 #   _on_error: 状态栏错误提示（错误提示不崩溃，A14.3/E0.5）
 #   _open_import/_open_settings: 导入对话框（生成后刷新）/设置面板
 #   refresh_library(items|None): 数据注入（默认重载 + mark_missing）
-#   closeEvent: engine.stop（H0.6）+ reporter.shutdown + bridge.shutdown（生命周期）
+#   closeEvent: engine.stop（H0.3）+ reporter.shutdown + bridge.shutdown（生命周期）
 #   关联配置：base.json/ui.json/effects.json；引擎（A9）、桥（A10）、导入（A11）、设置（A13）、音效（ui/sounds.py）

@@ -21,6 +21,7 @@
     "tonearm_drop_ms": 500
   },
   "thumbnail_size": 32,
+  "shelf_thumbnail_size": 56,
   "card_size": [128, 128],
   "drag_threshold": 8,
   "record_widget_size": 200,

@@ -29,23 +29,27 @@ class DraggableCardButton(QPushButton):
     # 置物架物品卡片（PL001.4 重设计）：封面缩略图标 + 名称/形态·曲数两行文本，支持按住拖动
 
     def __init__(self, item: Item, item_id: str, parent: QWidget | None = None) -> None:
-        # 初始化：按物品装配内容（缩略图 + 两行文本），记录物品 id，启动拖拽的按下位置置空
+        # 初始化：按物品装配内容（缩略图 + 两行文本），记录物品 id，启动拖拽的按下位置置空；
+        # 缩略图尺寸走 ui.json（FIX006.10：thumbnail 配置契约）
         total = sum(len(side.tracks) for side in item.sides.values())
         super().__init__(f"{item.name}\n{item.type.name}·{total}曲", parent)
         self._item_id = item_id
         self._press_pos: QPoint | None = None
+        thumb = max(
+            1, int(_SC.ui.get("shelf_thumbnail_size", 56))
+        )  # max(1) 防除零惯例
         cover = resolve_cover(item)
         if cover and Path(cover).is_file():
             pixmap = QPixmap(cover)
             if not pixmap.isNull():
                 thumbnail = pixmap.scaled(
-                    56,
-                    56,
+                    thumb,
+                    thumb,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
                 self.setIcon(QIcon(thumbnail))
-                self.setIconSize(QSize(56, 56))
+                self.setIconSize(QSize(thumb, thumb))
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # 记录按下位置（左键）

@@ -10,7 +10,17 @@ from PySide6.QtWidgets import QWidget
 
 from config.static.static_config import get_static_config
 from modules.items.model import Item
-from ui.widgets.parts import draw_reel, reel_factor
+from ui.widgets.parts import (
+    REEL_BASE_SPEED,
+    REEL_RADIUS_MAX,
+    REEL_RADIUS_MIN,
+    draw_reel,
+    reel_factor,
+)
+from utils.logger import get_logger
+
+# 模块日志（FIX006.7：未知形态回退告警——容错登记制条目⑥可观测）
+_logger = get_logger("ui.deck_widget")
 
 # 静态配置一次解包
 _SC = get_static_config()
@@ -29,7 +39,7 @@ _DROP_MAX = _ANGLE_START + _ANGLE_RANGE + 2.0  # 有效落针角上界（度）
 _HIT_RADIUS = 27.0  # 唱针命中半径（像素，以唱针尖端为圆心）
 _NEEDLE_FINE_STEP = 0.1  # Shift 精调系数（拖拽增量缩放）
 _SPIN_EASE = 2.2  # 转盘惯性趋近系数（speed += (target-speed)*min(1, dt*k)）
-_DECK_REEL_BASE_SPEED = 240.0  # 磁带仓观察窗卷轴基准角速度（度/秒，除以带卷因子，PL002.3）
+# 磁带仓观察窗卷轴基准角速度：走 parts.REEL_BASE_SPEED 单源（FIX006.9 收敛）
 
 
 class DeckWidget(QWidget):
@@ -99,8 +109,12 @@ class DeckWidget(QWidget):
 
     def set_item_type(self, key: str, cover: QPixmap | None = None) -> None:
         # 载体形态切换（PL002）：vinyl/cassette/cd 三分绘制；CD 附封面环带 pixmap（可 None）
-        # 未知键回退 vinyl（宽容）；切换后重绘
-        self._item_type = str(key) if str(key) in ("vinyl", "cassette", "cd") else "vinyl"
+        # 未知键回退 vinyl（宽容，FIX006.7：告警一次——容错登记制条目⑥）；切换后重绘
+        normalized = str(key)
+        if normalized not in ("vinyl", "cassette", "cd"):
+            _logger.warning("未知载体类型键（按黑胶绘制兜底）: %s", key)
+            normalized = "vinyl"
+        self._item_type = normalized
         self._cover = cover
         self.update()
 
@@ -144,10 +158,10 @@ class DeckWidget(QWidget):
         # PL002 磁带仓卷轴：播放中按恒线速推进（观察窗卷轴转动视觉）
         if self._item_type == "cassette" and self._playing and self._animations_enabled:
             self._reel_angle_l = (
-                self._reel_angle_l - dt * _DECK_REEL_BASE_SPEED / reel_factor(1.0 - self._side_progress)
+                self._reel_angle_l - dt * REEL_BASE_SPEED / reel_factor(1.0 - self._side_progress)
             ) % 360.0
             self._reel_angle_r = (
-                self._reel_angle_r - dt * _DECK_REEL_BASE_SPEED / reel_factor(self._side_progress)
+                self._reel_angle_r - dt * REEL_BASE_SPEED / reel_factor(self._side_progress)
             ) % 360.0
         target = 1.0 if self._playing else 0.0
         step = self._tick_ms / max(1, self._drop_ms)
@@ -155,6 +169,15 @@ class DeckWidget(QWidget):
             self._tonearm_pos = min(target, self._tonearm_pos + step)
         elif self._tonearm_pos > target:
             self._tonearm_pos = max(target, self._tonearm_pos - step)
+        # FIX006.5（A006-P3-①）：收敛自停——拖针取消/暂停中落针等路径下定时器
+        # 无外部停止信号，各量归位后自停（30ms 空重绘耗 CPU）；播放中/拖拽中不停
+        if (
+            not self._playing
+            and not self._dragging
+            and abs(self._spin_speed) <= 0.02
+            and self._tonearm_pos == target
+        ):
+            self.timer.stop()
         self.update()
 
     def _arm_rect(self) -> QRectF:
@@ -334,7 +357,7 @@ class DeckWidget(QWidget):
         fills = (1.0 - self._side_progress, self._side_progress)
         angles = (self._reel_angle_l, self._reel_angle_r)
         for center, fill, angle in zip(centers, fills, angles):
-            t = (reel_factor(fill) - 44.0) / (77.0 - 44.0)
+            t = (reel_factor(fill) - REEL_RADIUS_MIN) / (REEL_RADIUS_MAX - REEL_RADIUS_MIN)
             draw_reel(painter, center, r_min + (r_max - r_min) * t, hub, angle)
         # 走带路径（窗内底部横线）
         painter.setPen(QPen(QColor("#4a3f36"), 1))

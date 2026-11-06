@@ -16,6 +16,7 @@ from modules.playback.events import (
     TrackChangedPayload,
 )
 from modules.playback.queue import PlaybackQueue, build_queue
+from utils.convert import ms_from_seconds
 from utils.logger import get_logger
 
 # 模块日志（生成/播放/错误全链路记录，A14.4）
@@ -52,11 +53,13 @@ class PlaybackEngine:
         return self._player
 
     def _on_player_error(self, error: Any, error_string: str) -> None:
-        # 播放器错误回调（C0.2/D0.5）：解码失败/格式不支持/IO 错误 → ERROR(playback_error) + 状态同步 stopped
+        # 播放器错误回调（C0.2/D0.5）：解码失败/格式不支持/IO 错误 → ERROR(playback_error) + 状态同步 stopped；
+        # FIX006.2（A006-P2-2）：清挂起跳转——否则旧偏移会经 LoadedMedia 应用到之后错误曲目上
         from PySide6.QtMultimedia import QMediaPlayer
 
         if error == QMediaPlayer.Error.NoError:
             return
+        self._pending_seek = None
         _logger.warning("播放器错误: %s", error_string)
         emit(
             ERROR,
@@ -79,7 +82,7 @@ class PlaybackEngine:
             if self._pending_seek is not None:
                 seconds = self._pending_seek
                 self._pending_seek = None
-                self._player.setPosition(int(seconds * 1000))
+                self._player.setPosition(ms_from_seconds(seconds))
 
     def _emit_state(self, state: str) -> None:
         # 发播放状态事件（playing/paused/stopped）
@@ -147,15 +150,26 @@ class PlaybackEngine:
 
         self._queue = build_queue(item, auto_flip=load_config().auto_flip)
         self._just_flipped = False
-        # H0.3 体检修复（P2）：复位改走事件——播放中载入首曲缺失的新物品时，
+        # H0.2 体检修复（P2）：复位改走事件——播放中载入首曲缺失的新物品时，
         # 裸赋值不发事件会导致 UI 停留在"播放中"（转盘照转/按钮显示暂停）而实际无声
         self._pending_seek = None
         self._emit_state("stopped")
         player = self._ensure_player()
         first = self._queue.current_track()
         self._track = first
-        if first is not None:
+        if first is not None and not first.is_missing():
             player.setSource(QUrl.fromLocalFile(first.path))
+        elif first is not None:
+            # FIX006.11（A006-P3-⑦）：首曲缺失与 play() 同口径——file_missing 中文分类预检，
+            # 不 setSource（否则走 Qt 泛化英文错误，错误分类漂移）
+            _logger.warning("载入物品首曲缺失: %s", first.path)
+            emit(
+                ERROR,
+                ErrorPayload(
+                    category="file_missing",
+                    message=f"文件缺失：{first.title or first.path}",
+                ),
+            )
         self._emit_track()
 
     def play(self) -> None:
@@ -187,7 +201,7 @@ class PlaybackEngine:
         # 跳转（毫秒换算；未初始化播放器忽略）；ended 后 seek 会把媒体拉回 LoadedMedia，
         # 补发 paused 刷新按钮态（H0.4：否则 UI 卡在"播放结束"态无法继续）
         if self._player is not None:
-            self._player.setPosition(int(seconds * 1000))
+            self._player.setPosition(ms_from_seconds(seconds))
             if self.state == "ended":
                 self._emit_state("paused")
 
@@ -254,7 +268,9 @@ class PlaybackEngine:
         if track is None:
             return False
         if track.is_missing():
-            # E2.1 跳过语义：更新 _track 保持一致 + 发 TRACK_CHANGED（F0.2 UI 展示同步）+ ERROR
+            # E2.1 跳过语义：更新 _track 保持一致 + 发 TRACK_CHANGED（F0.2 UI 展示同步）+ ERROR；
+            # FIX006.3（A006-P2-3）：手动切曲路径停旧媒体 + 状态同步 stopped——
+            # 否则 UI 展示已切到缺失曲而扬声器继续放上一曲（自动链经 stop 无此错位）
             self._track = track
             self._emit_track()
             _logger.warning("播放失败（文件缺失）: %s", track.path)
@@ -265,6 +281,9 @@ class PlaybackEngine:
                     message=f"文件缺失：{track.title or track.path}",
                 ),
             )
+            if self._player is not None:
+                self._player.stop()
+            self._emit_state("stopped")
             return False
         self._track = track
         self._ensure_player().setSource(QUrl.fromLocalFile(track.path))
@@ -317,7 +336,7 @@ class PlaybackEngine:
 # ===== modules/playback/engine.py 类/函数说明 =====
 # PlaybackEngine: 播放引擎（内部 QMediaPlayer 延迟导入，对外仅项目模型/事件）
 #   load_item(item): 建队列（auto_flip 读 settings）→ 载第一首 → 发 TRACK_CHANGED；
-#     复位走 _emit_state("stopped")（H0.3）+ 清挂起跳转
+#     复位走 _emit_state("stopped")（H0.2）+ 清挂起跳转
 #   play/pause/stop/seek/position_ms: 播放控制（state 变化发 PLAYBACK_STATE）；
 #     seek 在 ended 后补发 paused（H0.4）
 #   seek_side(fraction): 面内寻曲（H1）——面内时间比例 → 定位曲目/曲内偏移；

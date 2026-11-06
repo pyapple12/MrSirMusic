@@ -9,6 +9,9 @@ from PySide6.QtGui import QColor, QPainter, QPen
 # 带卷半径物理因子（恒线速模型的几何侧）：44² → 77² 线性内插（空卷 → 满卷）
 REEL_RADIUS_MIN = 44.0
 REEL_RADIUS_MAX = 77.0
+# 播放基准角速度（度/秒）：恒线速模型的速度侧，实际角速度 = 本值 / reel_factor(fill)
+# （FIX006.9 收敛单源——record_widget 卡片与 deck_widget 磁带仓共用，防调参单向漂移）
+REEL_BASE_SPEED = 240.0
 
 
 def reel_factor(fill: float) -> float:

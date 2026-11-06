@@ -84,6 +84,10 @@ class SoundKit(QObject):
             self._crackle.setVolume(intensity)
         if intensity <= 0.0:
             self._stop_ambience()
+        elif self._active:
+            # FIX006.4（A006-P2-4）：播放中切档位（如 concise→refined）恢复底噪——
+            # _start_ambience 内部 enabled/kind/intensity 三重门控，幂等安全
+            self._start_ambience()
 
     def set_media_kind(self, kind: str) -> None:
         # 载体类型切换（载入物品联动）：黑胶才有循环底噪，切类型即停

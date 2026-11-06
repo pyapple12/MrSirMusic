@@ -44,7 +44,7 @@ if __name__ == "__main__":
 # get_version() -> str: 读取 base.json version 字段（版本唯一来源）
 #   逻辑：经 static_config 单例单通道读取 → isinstance(str) 校验；键缺失/非字符串返回 "unknown"
 #   异常：配置缺失/损坏由 static_config 容错为空 dict，此处回退 "unknown"（--version 容错，不崩溃）
-#   关联配置：config/static/base.json 的 version 字段（四段式 X.Y.Z.P）
+#   关联配置：config/static/base.json 的 version 字段（三段式 X.Y.Z——版本双轨见 AGENTS.md，FIX006.15）
 # run_gui() -> None: GUI 启动
 #   逻辑：延迟 import PySide6 与 ui.main_window → apply_theme → QApplication + MainWindow → 事件循环
 #   异常：ImportError（PySide6 缺失等）→ stderr 提示 + SystemExit(1)，不崩溃

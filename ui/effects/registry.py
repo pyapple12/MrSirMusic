@@ -2,11 +2,7 @@
 
 from typing import Any
 
-from config.static.static_config import (
-    DEFAULT_REALISM_LEVEL,
-    _fallback_level,
-    get_static_config,
-)
+from config.static.static_config import _fallback_level, get_static_config
 from ui.effects.wear import Effect, WearEffect, WeatheringEffect
 
 # 静态配置一次解包
