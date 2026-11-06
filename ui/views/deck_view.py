@@ -15,6 +15,7 @@ from ui.dnd import decode_item_id, is_item_drag
 from ui.widgets.deck_widget import DeckWidget
 from ui.widgets.progress_widget import ProgressWidget
 from ui.widgets.record_widget import RecordWidget
+from utils.convert import ms_from_seconds
 
 # 静态配置一次解包（拟物控件尺寸走 ui.json，B2.8）
 _SC = get_static_config()
@@ -190,8 +191,8 @@ class DeckView(QWidget):
         track = getattr(payload, "track", None)
         if track is not None:
             self.track_label.setText(f"{track.title}\n{track.artist or '未知艺人'}")
-            self._last_duration_ms = int(
-                max(0.0, float(getattr(track, "duration_seconds", 0.0) or 0.0)) * 1000
+            self._last_duration_ms = ms_from_seconds(
+                float(getattr(track, "duration_seconds", 0.0) or 0.0)
             )
         else:
             self.track_label.setText("未载入物品")

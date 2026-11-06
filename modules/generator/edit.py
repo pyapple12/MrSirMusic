@@ -50,7 +50,7 @@ def change_tag(item: Item, new_tag: str) -> None:
 # ===== modules/generator/edit.py 函数说明 =====
 # add_track(item, side_label, track) -> (bool, str): 加曲
 #   逻辑：面存在 → fits 校验（拒绝返回中文原因）→ 追加 → save_item（tracks 重建）
-# remove_track(item, side_label, index) -> bool: 移除（委托 items.factory + save_item）
+# remove_track(item, side_label, index) -> bool: 内联移除 + check_item 拒绝回滚 + save_item
 # rename_item(item, new_name): 改名（update_item 只动行）
 # change_tag(item, new_tag): 改 Tag（update_item 只动行）
 #   设计理由：曲目结构变更走 save_item（整体重建），元数据变更走 update_item（行更新）

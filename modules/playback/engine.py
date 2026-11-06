@@ -170,6 +170,9 @@ class PlaybackEngine:
                     message=f"文件缺失：{first.title or first.path}",
                 ),
             )
+            # FIX007.1（A007-P2）：补停旧媒体——预检跳过 setSource 后丢失其停声副作用，
+            # 播放中换载缺失首曲物品会"UI 冻结停止态而扬声器继续放旧曲"（A006-P2-3 同构）
+            player.stop()
         self._emit_track()
 
     def play(self) -> None:
@@ -294,7 +297,9 @@ class PlaybackEngine:
         return True
 
     def play_next(self) -> bool:
-        # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持推进）
+        # 播放下一首（含翻面）：队列推进成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持推进）；
+        # FIX007.2：换源入口清挂起跳转——旧 pending 对新源必然失效，防 LoadedMedia 错位应用
+        self._pending_seek = None
         if self._queue is None or not self._queue.next():
             return False
         # D0.4：进入 B 面第一首（刚翻面）时置标记，SIDE_FLIPPED 仅发一次
@@ -307,14 +312,17 @@ class PlaybackEngine:
         return ok
 
     def play_prev(self) -> bool:
-        # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持）
+        # 播放上一首：队列回退成功 → 载入播放；失败/缺失返回 False（E2.1 跳过语义：index 保持）；
+        # FIX007.2：换源入口清挂起跳转（同 play_next）
+        self._pending_seek = None
         if self._queue is None or not self._queue.prev():
             return False
         return self._play_current("切回上一首")
 
     def flip(self) -> bool:
         # 手动翻面：A 面 → 跳 B 面首播放（发 SIDE_FLIPPED）；已在 B 面/无 B 面返回 False
-        # 失败（B 面首缺失）→ 回滚 A 面末 + 复位翻面标记（E1.1/E2.1）
+        # 失败（B 面首缺失）→ 回滚 A 面末 + 复位翻面标记（E1.1/E2.1）；FIX007.2：换源入口清挂起
+        self._pending_seek = None
         if self._queue is None or not (self._queue.boundary < len(self._queue.tracks)):
             return False
         if self._queue.index >= self._queue.boundary:

@@ -79,7 +79,7 @@ class ProgressWidget(QWidget):
 # ProgressWidget(QWidget): 进度显示（可拖动滑条 + mm:ss 时间，H5 由 QProgressBar 升级 QSlider）
 #   scrub_started/scrub_moved(int)/scrub_released(int): scrub 交互信号（值域 0-1000）
 #   is_scrubbing(): 拖动中状态（路由方挂起回写判断）
-#   on_progress(position_ms, duration_ms): 滑条值 + 时间（format_duration 毫秒→秒；scrub 中只刷时间）；
+#   on_progress(position_ms, duration_ms): 滑条值 + 时间（format_duration 毫秒→秒；scrub 中滑条与时间均挂起）；
 #     同时记录总时长供拖动预览换算
 #   time_text(): 时间文本只读（验证用）
 #   设计理由：时间格式复用 utils.convert（单一实现）；seek 换算经信号外抛（控件零业务依赖）；

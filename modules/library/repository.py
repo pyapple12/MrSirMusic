@@ -224,6 +224,6 @@ def update_item(item: Item) -> None:
 # load_all() -> list[Item]: 全量（两查询内存组装，无 N+1）
 # load_item(id) -> Item | None: 单查（无 → None）
 # delete_item(id): 删除（外键级联 tracks）
-# update_item(item): 只更新 items 行（改元数据/播放次数不重建 tracks）
+# update_item(item): 只更新 items 行（改元数据，不重建 tracks；FIX006.13 起不写 play_count）
 #   设计理由：save 与 update 职责分离（整体重建 vs 行更新）；全量事务保证一致性
 #   关联配置：DB_PATH（schema.py）、载体类型（item_types.json）

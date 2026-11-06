@@ -1,4 +1,4 @@
-# 物品工厂函数（A3.5）：创建物品 / 向面加曲目（含容量校验）
+# 物品工厂函数（A3.5）：创建空物品
 
 from modules.items.model import Item, ItemType, Side
 

@@ -379,3 +379,18 @@ Track: path / title / artist / album / duration(秒) / format
   - **需产品定案（观察项内，不占编号）**：空 A 面 + B 有曲物品可生成（generate_check 不拦，F3.1 语义边界）；播放计数是否属第一版承诺功能（与⑨联动）
 - **二、参考级观察项 30 条**（全部维持豁免；摘要分类）：需 Qt 行为验证 3（seek_side(1.0) 曲末 EndOfMedia、LoadedMedia 回调内 setPosition、键盘操作滑条残留 wind）；设计使然/已文档化 8（EndOfMedia 回调链 setSource+日志、auto_flip 载入快照、空闲期每秒 PROGRESS(0)、容量双实现刻意同口径、queue.prev 不复位 flipped（A005 遗留）、created_at 同秒排序、embedded_cover 预留、decoder 占位零消费）；性能可接受 6（repository 每操作建连、paintEvent 每帧渐变、mark_missing 逐曲 stat、库列表重读封面、_ensure_player 幂等、rogue Side 已告警）；纯理论/轻微 13（mid-session 删库缓存、edit 回滚无日志、event_bus id() 碰撞、registry 误命中、probe 误判（A005 已登记）、空态拖针文案、载入后进度残留、dnd 损坏 mime、save_config 回调未净化、_round_rect_path 内层 import、新载体键需同步 deck_widget 分支（契约提示）、registry.default_level 仅探针消费、deck_widget 空态事件防护（需桥空态发事件才可达））
 - **三、亮点**：A005 全部修复 + G/H/PL 三大批次关键修复零回退零漏改（三路独立 git show 双核对）；容错登记制首次存量盘点即产出（P3 制度生效证据）；三路交叉勘误上轮提交号（30f5348=E 系列 vs F=5ab69ca）；playback 主链走查无确定性缺陷；版本三方一致（0.1.4）
+
+## 附录 A007：全量代码审计报告（第7轮，2026-11-06）
+
+> 范围：main.py + config/modules/ui/utils 全部 .py + 5 个静态 json；三路并行只读代理 + 交叉汇总去重；基线 commit 1289729（FIX006，V0.1.4.2）
+> 方式：FIX006 修复在位性回归复核（git show 1289729 全 diff 逐项）+ 修复自身新缺陷定向排查 + 13 维度对照；P 级证据经主会话抽查坐实
+> 结果：**P 级 6 条（P2 1 / P3 5，无 P0/P1）/ 新增观察项 14 条（维持豁免）；A006 已定案 30 条观察项不重报（相关代码未变化）**
+> 状态：✅ 已修复（2026-11-05：FIX007 共 7 条全部落地——1 条 P2 + 5 条 P3 + 验证收尾；全量 14 探针 PASS + --version 0.1.4；反向验收 playbackState StoppedState 断言覆盖；任务清单见 x.progress.md FIX007）
+> 编号备注：A007/FIX007 同号绑定对齐轮次（本轮恰为 max+1，无例外）；A006 观察项未提升（float 截断 1 条维持"需定案"标记）
+
+- **零、FIX006 回归复核（21 项核查）**：全部 ✅ 在位零回退——modules 6（regenerate 防护口径确等/delete 告警/shape 校验提取/死代码删除彻底/播放计数写链移除 schema 未动/cover 断环 re-export 无破坏）、playback 5（error 清 pending/missing 停声/首曲预检/ms 收敛/H 编号）、UI+配置 10（regenerate 捕获/set_level 恢复/收敛自停互斥排查/on_progress 挂起/_sanitize_item_types 行为等价/REEL 单源/缩略图配置/死 import/文档一致/toggle_play）；版本三方一致 0.1.4 ✅
+- **一、P0-P3（6 条）**：
+  - **P2 1**——FIX006.11 自身引入回归：播放中载入"首曲缺失"物品 → 发 stopped（UI 冻结停止态）但不 stop 旧媒体 → 扬声器继续放旧曲（原 setSource 虽错误但带停声副作用，预检跳过 setSource 后副作用丢失；engine.py:160-172 缺失 elif 分支）；修法 = 缺失分支补 player.stop()（一行）
+  - **P3 5**——① _pending_seek 跨 setSource 竞态窗口（play_next/play_prev/flip/seek 入口不清，遗留 H1；修法 = 三换源入口进入时清，stop 是否清并入统一决策）；② cover/providers 断环不彻底（_build_registry 函数内延迟 import 环消后无必要 + COVERS_DIR re-export 零消费死重量，FIX006.14 自留）；③ deck_view.py:193-195 秒→毫秒第 4 处散布（FIX006.12 漏检 UI 层，"唯一入口"声明被打破）；④ FIX006 执行残留文档组 5 处（model.py 说明区已删方法残留/factory.py 头注失实/edit.py 幽灵符号/repository.py 尾注矛盾/progress_widget.py 说明区与新行为矛盾）；⑤ static_config.py:179-180 不可达防御分支（双保险语义未标注）
+- **二、参考级观察项 14 条**（维持豁免）：需产品定案 1（item_types 放行 float 被 from_config int() 静默截断——现 json 全 int 纯理论）；需验证 2（拖针收敛窗口切档唱针冻结半程、stop() 后 LoadedMedia 应用 pending 续播语义）；设计使然/幂等冗余 5（自动链缺失曲双 stopped 双 stop、_ensure_player 先于预检、auto_flip flipped 不对称 E2.1/E1.1 语义分立、regenerate 不复跑 validate_selection、progress duration 兜底未入登记制——下轮盘点补录）；轻微 6（import_cover_file 外层静默（调用链有告警）、_row_to_item 未知类型 0 容量降级（有告警）、spin 缺省 2000 同文件三处、re-export noqa 待 FIX007 处置、说明区未覆盖新增逻辑、shelf_view"防除零"注释措辞）
+- **三、亮点**：FIX006 全部 17 条修复零回退（三路 git show 1289729 逐项核对）；修复自身缺陷被紧随审计当场抓住（审计-修复闭环证据）；收敛自停与惯性/快捷键互斥、set_level 与 set_active 互斥、_sanitize_item_types 行为等价性三项重点排查全过；上轮收尾全量回归曾红灯一次（setattr 缩进），探针当场抓住修复——验证链完整

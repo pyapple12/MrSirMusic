@@ -119,8 +119,8 @@ class Item:
 #   from_tagging(tag, path): duck typing 取 TagData 字段（A4.1 建成后天然兼容）
 #   is_missing(): Path.is_file 检测（文件被移动 → 播放时提示，不崩溃）
 # Side(dataclass): 面（label + tracks）
-#   total_seconds(): 时长聚合；add_track(): 仅追加；remove_track(track_id): 按 path 移除
+#   total_seconds(): 时长聚合；add_track(): 仅追加
 #   注：容量边界判断统一走 modules/rules/capacity（B3.1 已删除冗余的 is_full）
-# Item(dataclass): 物品（uuid id、sides dict、聚合方法 all_tracks/total_seconds/side_for/bump）
+# Item(dataclass): 物品（uuid id、sides dict、聚合方法 all_tracks/total_seconds/side_for）
 #   关联配置：ItemType 由 config/static/item_types.json 装配（经 static_config）
 #   设计理由：纯数据层零依赖，持久化（A6）/规则（A5）/生成（A8）均在其上

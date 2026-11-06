@@ -176,8 +176,6 @@ def _sanitize_item_types(data: dict[str, Any]) -> dict[str, Any]:
     # 非法移除记录（minutes_per_side/side/shape）或移除键（spin_ms_per_rev 可选键）
     result = _sanitize_types(data, values_must_be_dict=True)
     for type_key, rec in list(result.items()):
-        if not isinstance(rec, dict):
-            continue
         mp = rec.get("minutes_per_side")
         if (
             mp is None
