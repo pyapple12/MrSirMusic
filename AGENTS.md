@@ -43,7 +43,8 @@
 - **版本双轨**（2026-11-05 采纳 CapsulePulse 范本，替代原四段 X.Y.Z.P 口径）：机器版本唯一来源 = `config/static/base.json` 的 `version` 字段（**三段式 `X.Y.Z`**：`X.Y` 版本主线，第一版 `0.1`；`Z` 内容版本，新增内容/重构/小版本更新时 `+1`）；对外正式文本**分两类**——README 徽章用三段式（值 = `base.json` 即时推进，链接指向 Releases 页），**commit 标题用四段式 `VX.Y.Z.R`**（前三段与 `base.json` 一致，第四段 R 为修订号，只随提交历史记录、不入任何配置文件；递增规则见 Commit 提交规范）。历史四段版本（V0.1.0.0–V0.1.1.0）为既有记录保留；当前机器版本以 `base.json` 即时值为准（FIX006.15：删时点性快照，防漂移）
 - `main.py` 收编入口分发（argparse + GUI）；模块间顶层 import，不要使用函数内延迟 import（PySide6 等重依赖除外，可在函数内导入）
 - `.reference/` 目录是外部项目的 git clone（浅克隆），**不纳入本仓库版本控制**；需要更新时重新 clone
-- 项目级自建 skill 在 `.agents/skills/`（`audit-project` / `audit-report` / `plan-task` / `progress-task` / `prune-docs`；`.opencode/skills/` 为 opencode 集成的历史副本，**修订以 `.agents/` 为准**）
+- 项目级 skill 统一在 `.agents/skills/`（19 个 = 自建 5 + skillforge + 外部收录 13）：自建为 `audit-project` / `audit-report` / `plan-task` / `progress-task` / `prune-docs`；`skillforge` 为技能创建/审计（自 `.opencode/skills/` 合并迁入，旧副本目录已删除）；外部收录 13 个（gamedev 3 + Blender 7 + taste-skill / diagram-design / ai-image-prompts-skill）源自 F:\Collection 技能库，均 MIT，来源/用途/维护约定见 `.agents/skills/README.md`；**修订一律以 `.agents/` 为准**
+- `.agents/skills/` 整目录不入库（2026-11-07 起 gitignore，与 `.reference/` 同性质的机器本地资源；ai-image-prompts 提示词库可用 `scripts/setup.js --check` 重建）；来源/用途/维护约定见 `.agents/skills/README.md`
 - 四文件职责：方案与审计归档 `z.plan.md` / 源码研读报告 `w.study.md` / 任务清单 `x.progress.md` / 问题与远期备忘 `y.problem.md`（详见各文件头部职责块与"任务清单纪律"节）
 
 ## 任务清单纪律（x.progress.md / z.plan.md，2026-11-05 切换三线编号轨道）
@@ -167,7 +168,7 @@
 
 ## Git 注意
 
-- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.mimosa/`、`.zcode/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 与 `.agents/skills/` 纳入版本控制
+- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.agents/skills/`、`.mimosa/`、`.zcode/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 纳入版本控制
 - 严禁将 API key、authCookie、workspaceId 等凭据提交到仓库
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 

@@ -18,12 +18,15 @@ class ProgressWidget(QWidget):
     scrub_released = Signal(int)  # 松手（滑条原始值 0-1000；路由方换算秒数后 seek）
 
     def __init__(self, parent: QWidget | None = None) -> None:
-        # 初始化：滑条（0-1000）+ 时间标签；scrub 期间外部 on_progress 回写被挂起
+        # 初始化：滑条（0-1000，NoFocus 不进焦点链 PL004.1）+ 时间标签；scrub 期间外部 on_progress 回写被挂起
         super().__init__(parent)
         self._scrubbing = False
         self._duration_seconds = 0.0  # 最近一次上报的总时长（拖动预览换算用）
         self.bar = QSlider(Qt.Orientation.Horizontal)
         self.bar.setRange(0, _SLIDER_MAX)
+        # PL004.1：←/→ 已被全局快捷键绑定上下曲（PL003.5），滑条若进焦点链会出现
+        # "聚焦但箭头键无效"的歧义——不参与焦点链；scrub 为纯鼠标交互
+        self.bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         # scrub 三态：按下挂起回写 / 拖动预览 + wind / 松手 seek（信号在滑条实例上）
         self.bar.sliderPressed.connect(self._on_pressed)
         self.bar.sliderMoved.connect(self._on_moved)

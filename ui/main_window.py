@@ -84,6 +84,8 @@ class MainWindow(QMainWindow):
         add_change_listener(self._on_settings_changed)
         self._apply_realism(load_config().realism_level)
         self.refresh_library(load_all())
+        # PL004.1：初始焦点显式落物品库列表（主内容件优先——缺省首焦点会被 QTabBar 捕获）
+        self.library_view.list.setFocus()
 
     def _build_menu_bar(self) -> None:
         # 菜单栏：文件（导入/生成、退出）、视图、设置（设置面板 A13.4）

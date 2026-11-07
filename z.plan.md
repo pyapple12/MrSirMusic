@@ -394,3 +394,34 @@ Track: path / title / artist / album / duration(秒) / format
   - **P3 5**——① _pending_seek 跨 setSource 竞态窗口（play_next/play_prev/flip/seek 入口不清，遗留 H1；修法 = 三换源入口进入时清，stop 是否清并入统一决策）；② cover/providers 断环不彻底（_build_registry 函数内延迟 import 环消后无必要 + COVERS_DIR re-export 零消费死重量，FIX006.14 自留）；③ deck_view.py:193-195 秒→毫秒第 4 处散布（FIX006.12 漏检 UI 层，"唯一入口"声明被打破）；④ FIX006 执行残留文档组 5 处（model.py 说明区已删方法残留/factory.py 头注失实/edit.py 幽灵符号/repository.py 尾注矛盾/progress_widget.py 说明区与新行为矛盾）；⑤ static_config.py:179-180 不可达防御分支（双保险语义未标注）
 - **二、参考级观察项 14 条**（维持豁免）：需产品定案 1（item_types 放行 float 被 from_config int() 静默截断——现 json 全 int 纯理论）；需验证 2（拖针收敛窗口切档唱针冻结半程、stop() 后 LoadedMedia 应用 pending 续播语义）；设计使然/幂等冗余 5（自动链缺失曲双 stopped 双 stop、_ensure_player 先于预检、auto_flip flipped 不对称 E2.1/E1.1 语义分立、regenerate 不复跑 validate_selection、progress duration 兜底未入登记制——下轮盘点补录）；轻微 6（import_cover_file 外层静默（调用链有告警）、_row_to_item 未知类型 0 容量降级（有告警）、spin 缺省 2000 同文件三处、re-export noqa 待 FIX007 处置、说明区未覆盖新增逻辑、shelf_view"防除零"注释措辞）
 - **三、亮点**：FIX006 全部 17 条修复零回退（三路 git show 1289729 逐项核对）；修复自身缺陷被紧随审计当场抓住（审计-修复闭环证据）；收敛自停与惯性/快捷键互斥、set_level 与 set_active 互斥、_sanitize_item_types 行为等价性三项重点排查全过；上轮收尾全量回归曾红灯一次（setattr 缩进），探针当场抓住修复——验证链完整
+
+## 附录 PL004：game-ui-ux 对照审查与补强（2026-11-07 立项）
+
+> 状态：✅ 已完成（2026-11-07 收口，全量 14 探针 PASS + 十图终审读图通过；任务组见 x.progress.md「PL004」）。
+
+**定案口径**
+
+- 方向定案：以 `.agents/skills/game-ui-ux`（引擎中立游戏 UI 架构，2026-11-07 收录）为审查基线，对照 ui/ 层逐维审查 + 热点当场修——审查维度：焦点体系（QShortcut WindowShortcut 与按钮 NoFocus 组合下的派发一致性、Tab 序、初始焦点确定性、卡片聚焦可见性）、缩放安全区（980×640 最小窗下 deck 居中构图挤压行为、shelf 分组流式换行、library 行省略策略）、事件驱动纪律（UI 状态更新零轮询残留）
+- 产出形态定案：审查发现逐点注记于任务条目勾选注记；可修热点当场修（文件/函数级）；需产品决策项转 y.problem.md 备忘（不占编号）
+- 版本定案：收口推进 `0.1.5`（commit 标题 V0.1.5.1 起）
+
+**明确不做**：手柄/控制器导航（桌面鼠标键盘场景）；UI 屏幕状态栈重构（主窗 + 两对话框已够）；多断点响应式布局；深浅色双主题（PL003 已定案进 y.problem 备忘）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL004」组。
+
+## 附录 PL005：Blender 拟物贴图管线（2026-11-07 立项）
+
+> 状态：📌 待实施（任务组见 x.progress.md「PL005」；硬依赖环境门禁 PL005.1——Blender + blender-mcp 探活不过则全组挂起等环境，不降级实施）。
+
+**定案口径**
+
+- 方向定案：拟物视觉升级走「Blender 预渲染烘焙贴图 + QPainter 分层合成」——运行时仍纯 QPainter、零新 Python 依赖，贴图为静态资产；产物 PNG 入 `data/textures/`（纳入版本控制），.blend 源文件不入库（留 `.temp/blender_src/`）
+- 贴图清单定案（四类）：`vinyl_disc`（盘面沟槽+高光）/ `cassette_shell`（塑料壳+观察窗质感）/ `cd_disc`（薄膜干涉彩虹反射）/ `walnut_panel`（胡桃木面板，无缝平铺）；统一规格 512×512、key light 左上统一光照
+- 档位接线定案：concise=纯矢量绘制（现状不变）/ refined=贴图底+简化高光 / realistic=贴图全量+动态层全开；`effects.json` 各档加 `texture` 开关（bool），deck_widget/record_widget 经 `set_realism(level)` 切换绘制路径
+- 容错定案：贴图文件缺失/加载失败 → 回退现有矢量绘制 + 告警一次（AGENTS 容错登记制随 PL005.4 补登记）
+- 技能路由定案：制作走 `.agents/skills/blender-director` 入口 + materials / texture-workflow / lighting / rendering 子技能 + qa-review 截图门禁（技能已收录本项目 `.agents/skills/`，见其 README）
+- 版本定案：收口推进 `0.1.6`（commit 标题 V0.1.6.1 起）
+
+**明确不做**：3D 实时渲染/视差；新 Python 依赖（贴图消费只用 QPixmap）；modules 层改动（贴图为 ui 层装饰资产）；4K 级贴图（512 档覆盖 96-128px 显示目标）；AI 生图替代 Blender 烘焙（光照不可控）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL005」组。

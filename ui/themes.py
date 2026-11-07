@@ -37,9 +37,11 @@ def apply_theme(app: Any) -> None:
     QPushButton:pressed {{ background-color: {c["pressed"]}; }}
     QPushButton:disabled {{ background-color: {c["disabled"]}; color: {c["muted"]};
         border-color: {c["border"]}; }}
+    QPushButton:focus {{ border: 1px solid {c["text"]}; }}
     QAbstractItemView {{ background-color: {c["background"]}; alternate-background-color: {c["surface"]};
         selection-background-color: {c["primary"]}; selection-color: {c["text_on_primary"]}; }}
     QListWidget {{ border: 1px solid {c["border"]}; }}
+    QAbstractItemView:focus {{ border: 1px solid {c["primary"]}; }}
     QTabWidget::pane {{ background-color: {c["background"]}; border: 1px solid {c["border"]}; }}
     QTabBar::tab {{ background-color: {c["surface"]}; color: {c["text"]}; padding: 5px 16px;
         border: 1px solid {c["border"]}; border-bottom: none; }}
@@ -85,7 +87,8 @@ def apply_theme(app: Any) -> None:
 # apply_theme(app) -> None: 设置全局 QSS
 #   逻辑：ui.json colors/font_family 取色 → QSS 模板格式化 → app.setStyleSheet
 #   异常：无（ui.json 缺字段回退默认色，宽容）
-#   覆盖面（PL001.2 补全）：窗体/按钮（含禁用态 PL003.2）/列表(QAbstractItemView)/Tab 页与页签/滚动区/
+#   覆盖面（PL001.2 补全）：窗体/按钮（含禁用态 PL003.2、聚焦描边 PL004.1）/列表(QAbstractItemView，
+#     含聚焦描边 PL004.1)/Tab 页与页签/滚动区/
 #     分组框(surface 底)/输入件(panel 底 + 聚焦描边)/菜单/工具提示/勾选件 indicator(PL003.2)/
 #     状态栏/滑杆/滚动条——消除默认白块与深色窗的割裂
 #   设计理由：可调参数一律走配置（AGENTS.md）；QSS 集中在主题层便于换肤

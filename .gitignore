@@ -242,3 +242,6 @@ music/*
 # 工具产物目录（mimosa 安全扫描 / zcode 会话工件）
 .mimosa/
 .zcode/
+
+# 项目级技能目录（机器本地资源，与 .reference/ 同性质；来源与维护约定见 .agents/skills/README.md）
+.agents/skills/
