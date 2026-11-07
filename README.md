@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.1.5-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.1.6-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
@@ -70,6 +70,7 @@ py -3.14 -m venv .venv
 - **拖拽唱针寻曲**：抓住唱机右侧唱针尖端拖到任意位置松手，即按面内比例跳转（跨曲自动换曲；按住 Shift 可精调）
 - 面内播放结束自动切下一首（A 面末自动翻面取决于"自动翻面"设置）
 - 拟真音效（随档位）：黑胶播放时有爆裂/嘶声底噪与落针刮擦声、翻面落针声；磁带换曲有机械咔哒声；简洁档静音
+- **拟物贴图（精致/真实档）**：黑胶盘面、CD 碟面（含彩虹反射与中心孔）、磁带壳、置物架卡片木纹底为 Blender 烘焙纹理（`data/textures/`）；贴图缺失自动回退矢量绘制
 
 ### 设置（拟真度）
 

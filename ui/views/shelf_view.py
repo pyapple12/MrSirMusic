@@ -20,6 +20,7 @@ from modules.cover.providers import resolve_cover
 from modules.items.model import Item
 from config.static.static_config import get_static_config
 from ui.dnd import ITEM_MIME_TYPE, encode_item_id
+from ui.widgets.parts import TEXTURES_DIR, texture_enabled, texture_pixmap
 
 # 静态配置一次解包（卡片尺寸/拖拽阈值走 ui.json，B2.8）
 _SC = get_static_config()
@@ -35,6 +36,7 @@ class DraggableCardButton(QPushButton):
         super().__init__(f"{item.name}\n{item.type.name}·{total}曲", parent)
         self._item_id = item_id
         self._press_pos: QPoint | None = None
+        self._texture_on = False  # PL005.5 卡片贴图底开关（ShelfView.set_realism 同步）
         # PL004.1：空格已被全局播放/暂停快捷键占用、回车在非对话框不触发按钮——
         # 卡片没有键盘激活路径，不进焦点链（防"聚焦却不可激活"歧义）；激活走鼠标点击/拖放
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -53,6 +55,18 @@ class DraggableCardButton(QPushButton):
                 )
                 self.setIcon(QIcon(thumbnail))
                 self.setIconSize(QSize(thumb, thumb))
+
+    def set_texture(self, on: bool) -> None:
+        # 卡片贴图底开关（PL005.5，ShelfView.set_realism 同步）：经 QSS background-image 打底
+        # （走 Qt 原生绘制路径——QSS 按钮层级内自绘 paintEvent 有崩溃面，2026-11-07 bisect 实证）；
+        # 关闭/贴图缺失 → 清组件样式表回主题默认
+        tex = texture_pixmap("walnut_panel") if on else None
+        if tex is not None:
+            url = (TEXTURES_DIR / "walnut_panel.png").as_posix()
+            self.setStyleSheet(f"QPushButton {{ background-image: url({url}); }}")
+        else:
+            self.setStyleSheet("")
+        self._texture_on = bool(tex is not None)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # 记录按下位置（左键）
@@ -180,6 +194,7 @@ class ShelfView(QWidget):
         # 初始化：滚动区 + 分组容器（set_items 时重建）
         super().__init__(parent)
         self._items: list[Item] = []
+        self._texture_on = False  # PL005.5 卡片贴图底开关（set_realism 注入）
         self._container = QWidget()
         self._shelf_layout = QVBoxLayout(self._container)
         self._shelf_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -214,11 +229,19 @@ class ShelfView(QWidget):
                 btn = DraggableCardButton(item, item.id)
                 card_w, card_h = _SC.ui.get("card_size", [110, 90])
                 btn.setFixedSize(int(card_w), int(card_h))
+                btn.set_texture(self._texture_on)
                 btn.clicked.connect(
                     lambda _=False, iid=item.id: self.item_clicked.emit(iid)
                 )
                 flow.addWidget(btn)
             self._shelf_layout.addWidget(box)
+
+    def set_realism(self, level: str) -> None:
+        # 拟真度档位注入（PL005.5）：卡片贴图底开关随 effects.json texture 键，
+        # 存档位供后续重建卡片继承 + 传播到在架卡片重绘
+        self._texture_on = texture_enabled(str(level))
+        for btn in self.findChildren(DraggableCardButton):
+            btn.set_texture(self._texture_on)
 
 
 # ===== ui/views/shelf_view.py 类/函数说明 =====
@@ -228,9 +251,12 @@ class ShelfView(QWidget):
 #   minimumSize/sizeHint: 单卡最大宽高 + 边距（可换行收缩的下限）
 # DraggableCardButton(QPushButton): 物品卡片（缩略图 + 两行文本 + 按住拖动）
 #   NoFocus（PL004.1）：空格被全局播放/暂停占用、回车非对话框不触发——无键盘激活路径不进焦点链
+#   set_texture(on): 贴图底经 QSS background-image 打底（PL005.5；不走自绘——QSS 按钮层级
+#     自绘 paintEvent 存在 C++ 崩溃面（bisect 实证），原生绘制路径稳定性已由全部现有视图证明）
 # ShelfView(QWidget): 置物架视图（按 Tag 分组陈列）
 #   scroll: 滚动区引用（验证断言用，PL004.2）
 #   set_items(items): 分组重建（tag 分组 → QGroupBox + _FlowLayout 卡片流；无 Tag → 未分类）
+#   set_realism(level): 拟真度档位注入（PL005.5：卡片贴图底开关，传播在架卡片 + 重建继承）
 #   item_clicked(str): 卡片点击信号（交 main_window 路由到唱机播放）
 #   设计理由：陈列视图不持久化数据（物品的家是物品库）；分组仅视图逻辑；
 #     组内行布局改流式（PL004.2：原 QHBoxLayout 不换行，最小窗多卡溢出横向滚动条）

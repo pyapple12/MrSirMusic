@@ -155,8 +155,12 @@ class MainWindow(QMainWindow):
 
     def _apply_realism(self, level: str) -> None:
         # 应用拟真度档位到唱机控件（效果器叠加 + 动画开关；B0.4 档位接线）+ 音效响度（H3）
+        # + 贴图打底分发（PL005.5：deck/record/shelf 三处随 effects.json texture 键）
         apply_effects_level(self.deck_view.record_widget, level)
         self.deck_view.deck_widget.set_animations_enabled(animations_enabled(level))
+        self.deck_view.deck_widget.set_realism(level)
+        self.deck_view.record_widget.set_realism(level)
+        self.shelf_view.set_realism(level)
         self.sound_kit.set_level(level)
 
     def _on_settings_changed(self, cfg) -> None:

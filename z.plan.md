@@ -411,7 +411,7 @@ Track: path / title / artist / album / duration(秒) / format
 
 ## 附录 PL005：Blender 拟物贴图管线（2026-11-07 立项）
 
-> 状态：📌 待实施（任务组见 x.progress.md「PL005」；硬依赖环境门禁 PL005.1——Blender + blender-mcp 探活不过则全组挂起等环境，不降级实施）。
+> 状态：✅ 已完成（2026-11-07 收口，全量 14 探针 PASS + 十三图终审读图通过；环境门禁经用户确认落地 Steam Blender 5.2.3 LTS + blender-mcp；任务组见 x.progress.md「PL005」）。
 
 **定案口径**
 
@@ -425,3 +425,18 @@ Track: path / title / artist / album / duration(秒) / format
 **明确不做**：3D 实时渲染/视差；新 Python 依赖（贴图消费只用 QPixmap）；modules 层改动（贴图为 ui 层装饰资产）；4K 级贴图（512 档覆盖 96-128px 显示目标）；AI 生图替代 Blender 烘焙（光照不可控）。
 
 **实施与证据**：逐条做法与验证见 x.progress.md「PL005」组。
+
+**贴图规格表（PL005.2 定案，2026-11-07）**
+
+统一：512×512 PNG；Cycles CPU 64 样本 + 降噪；正交相机垂直俯拍；key 光左上 + 弱补光右下；盘面类 film_transparent 透明底，平铺类不透明。
+
+| 键 | 内容 | 构图 | 底 | 关键视觉（程序化节点方案） |
+|---|---|---|---|---|
+| `vinyl_disc` | 黑胶盘面 | 全幅圆盘（直径 96%，四周透明边） | 透明 | 炭黑基底 + 环向波纹 ~140 圈细沟槽（粗糙度 ±微扰）+ 左上宽幅高光扫带；盘芯区留空（应用侧自绘 label） |
+| `cd_disc` | CD 裸碟 | 全幅圆盘含中心孔（孔径 ~10% 透明镂空） | 透明 | 银色金属基底（metallic 1 / rough 0.12）+ 半径×角度驱动的薄膜干涉彩虹色带（ColorRamp 四段：金→紫→青→银）+ 中性灰 hub 环 |
+| `cassette_shell` | 磁带仓壳塑料面 | 满幅平铺 | 不透明 | 深炭塑料（#262019 族）+ 高频噪声粗糙度扰动 + 横向拉伸微划痕 + 轻清漆 |
+| `walnut_panel` | 胡桃木纹 | 满幅可平铺（整数周期波纹保证两轴无缝） | 不透明 | 暖棕三阶色带（贴皮 surface 色族）+ 波纹扰动仿木纹摆动 + 高频细纹加深 |
+
+档位接线：`effects.json` 三档加 `texture` bool——concise=false（纯矢量现状不变）/ refined=true（贴图打底，**跳过手绘沟槽高光弧**防与照片级贴图打架）/ realistic=true（贴图打底 + 手绘动态层全开）。qa 门禁：四图读图核对 + walnut 2×2 平铺验证图查缝（验证图只落 .temp 不入库）。
+
+**明确不做**（补充）：AI 生图替代烘焙；非整数周期波纹（会出平铺缝）。

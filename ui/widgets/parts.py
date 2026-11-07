@@ -1,10 +1,17 @@
-# 拟物共享绘制件（PL002.1）：磁带卷轴/带卷物理因子等跨控件共用绘制
+# 拟物共享绘制件（PL002.1）：磁带卷轴/带卷物理因子/拟物贴图加载等跨控件共用
 # record_widget（置物架卡片磁带观察窗）与 deck_widget（磁带仓形态）共用，避免绘制逻辑双份漂移
 
 import math
+from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
+
+from config.static.static_config import get_static_config
+from utils.logger import get_logger
+
+# 模块日志（PL005.4：贴图加载失败告警一次——容错登记制可观测）
+_logger = get_logger("ui.parts")
 
 # 带卷半径物理因子（恒线速模型的几何侧）：44² → 77² 线性内插（空卷 → 满卷）
 REEL_RADIUS_MIN = 44.0
@@ -13,11 +20,45 @@ REEL_RADIUS_MAX = 77.0
 # （FIX006.9 收敛单源——record_widget 卡片与 deck_widget 磁带仓共用，防调参单向漂移）
 REEL_BASE_SPEED = 240.0
 
+# 拟物贴图目录（PL005.3 产物：Blender 烘焙四贴图；仓库内固定相对路径）
+TEXTURES_DIR = Path(__file__).resolve().parents[2] / "data" / "textures"
+
+# 贴图惰性缓存（键 → QPixmap 或 None；None = 已知缺失/损坏，回退矢量绘制不再重试读盘）
+_TEXTURE_CACHE: dict = {}
+_TEXTURE_WARNED: set = set()
+
 
 def reel_factor(fill: float) -> float:
     # 带卷半径因子：sqrt(44² + (77²-44²)×fill)——卷多因子大（角速度反比于它，恒线速）
     fill = min(1.0, max(0.0, fill))
     return math.sqrt(REEL_RADIUS_MIN**2 + (REEL_RADIUS_MAX**2 - REEL_RADIUS_MIN**2) * fill)
+
+
+def texture_pixmap(key: str) -> QPixmap | None:
+    # 拟物贴图惰性加载（PL005.4）：data/textures/<key>.png → QPixmap；缺失/损坏 → None
+    # （回退矢量绘制；每键仅告警一次，容错登记制条目；结果进缓存不重试读盘）
+    if key in _TEXTURE_CACHE:
+        return _TEXTURE_CACHE[key]
+    path = TEXTURES_DIR / f"{key}.png"
+    pixmap: QPixmap | None = None
+    if path.is_file():
+        loaded = QPixmap(str(path))
+        if not loaded.isNull():
+            pixmap = loaded
+    if pixmap is None and key not in _TEXTURE_WARNED:
+        _logger.warning("贴图加载失败（回退矢量绘制）: %s", path.name)
+        _TEXTURE_WARNED.add(key)
+    _TEXTURE_CACHE[key] = pixmap
+    return pixmap
+
+
+def texture_enabled(level: str) -> bool:
+    # 拟真度档位 → 贴图打底开关（effects.json levels[level].texture；缺档/缺键宽容 False）
+    levels = get_static_config().effects.get("levels", {})
+    record = levels.get(level) if isinstance(levels, dict) else None
+    if isinstance(record, dict):
+        return bool(record.get("texture", False))
+    return False
 
 
 def draw_reel(
@@ -58,9 +99,13 @@ def draw_reel(
 # ===== ui/widgets/parts.py 函数/常量说明 =====
 # REEL_RADIUS_MIN/REEL_RADIUS_MAX: 带卷半径因子上下界（44/77，与角速度公式同源量纲）
 # reel_factor(fill) -> float: 带卷半径因子（恒线速模型的半径侧；调用方角速度 = 基准/因子）
+# TEXTURES_DIR: 拟物贴图目录（data/textures；PL005.3 Blender 烘焙产物）
+# texture_pixmap(key) -> QPixmap|None: 贴图惰性缓存加载（缺失/损坏 → None 回退矢量 + 每键告警一次）
+# texture_enabled(level) -> bool: 档位贴图开关（effects.json levels[level].texture，宽容缺键）
 # draw_reel(painter, center, radius, hub_radius, angle): 单卷轴绘制（带卷 + 缠绕纹 + hub 3 齿）
 #   逻辑：带卷体 → 两圈内缠绕纹 → hub 圆 → save/translate/rotate 后画 3 齿（120° 分布）→ restore
 #   设计理由：卷轴绘制原在 record_widget 私有（PL002.1 迁出共享），deck_widget 磁带仓形态复用；
-#     本模块只管画（零状态、零动画），进度/角度推进留在各控件 _tick
-#   异常：无（纯绘制；半径/hub 非法值由调用方保证 >0）
-#   关联配置：无（视觉常量豁免先例）；消费方 record_widget / deck_widget
+#     本模块只管画（零状态、零动画），进度/角度推进留在各控件 _tick；
+#     贴图加载收口本模块单源（deck_widget/record_widget/shelf_view 共用，防三份加载器漂移）
+#   异常：无（纯绘制；半径/hub 非法值由调用方保证 >0；贴图读盘失败已捕获降级）
+#   关联配置：effects.json levels[].texture（档位开关）；消费方 record_widget / deck_widget / shelf_view

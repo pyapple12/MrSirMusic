@@ -16,6 +16,8 @@ from ui.widgets.parts import (
     REEL_RADIUS_MIN,
     draw_reel,
     reel_factor,
+    texture_enabled,
+    texture_pixmap,
 )
 from utils.logger import get_logger
 
@@ -65,6 +67,8 @@ class DeckWidget(QWidget):
         self._drag_angle = _ANGLE_REST  # 拖拽当前角度（度）
         self._last_pointer_angle = 0.0  # 上一帧指针绕枢轴角（度，解卷用）
         self._animations_enabled = True
+        self._texture_on = False  # PL005.4 贴图打底开关（set_realism 随档位更新）
+        self._realism_level = ""  # 当前拟真度档位名（refined/realistic 差异化叠加用）
         ui = _SC.ui
         anim = ui.get("animation", {}) if isinstance(ui, dict) else {}
         self._spin_ms = max(
@@ -97,6 +101,13 @@ class DeckWidget(QWidget):
     def tonearm_position(self) -> float:
         # 唱针位置 0-1（测试断言用）
         return self._tonearm_pos
+
+    def set_realism(self, level: str) -> None:
+        # 拟真度档位注入（PL005.4）：贴图打底开关随 effects.json levels[level].texture；
+        # refined = 贴图打底（跳手绘纹理细节）；realistic = 贴图 + 手绘纹理层全开；缺失档宽容关闭
+        self._realism_level = str(level)
+        self._texture_on = texture_enabled(self._realism_level)
+        self.update()
 
     def set_spin_ms(self, spin_ms: int) -> None:
         # 类型级转速（H2：item_types.spin_ms_per_rev；载入物品时注入，非法回退默认）
@@ -289,29 +300,53 @@ class DeckWidget(QWidget):
         painter.end()
 
     def _paint_vinyl(self, painter: QPainter, rect: QRectF) -> None:
-        # 黑胶形态（H4 现状）：转盘（旋转画槽纹）+ 唱针（枢轴/臂杆/唱头/配重，按视觉角摆动）
+        # 黑胶形态（H4 现状 / PL005.4 贴图分层）：转盘（贴图或矢量槽纹）+ 唱针（真实几何）
         painter.save()
         painter.translate(rect.center())
         painter.rotate(self._angle)
-        gradient = QRadialGradient(0, 0, rect.width() / 2)
-        gradient.setColorAt(0.0, QColor("#3a3a3a"))
-        gradient.setColorAt(1.0, QColor("#0d0d0d"))
-        painter.setBrush(gradient)
-        painter.setPen(QPen(QColor("#555555"), 1))
-        painter.drawEllipse(
-            QRectF(-rect.width() / 2, -rect.height() / 2, rect.width(), rect.height())
-        )
-        painter.setPen(QPen(QColor("#222222"), 1))
-        for i in range(4):
-            f = 0.55 + i * 0.08
-            painter.drawEllipse(
-                QRectF(
-                    -rect.width() * f / 2,
-                    -rect.height() * f / 2,
-                    rect.width() * f,
-                    rect.height() * f,
-                )
+        tex = texture_pixmap("vinyl_disc") if self._texture_on else None
+        if tex is not None:
+            # 贴图打底：盘面照片纹理（沟槽/高光已烘焙），随转盘角旋转；贴图自带透明边与盘缘
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap(
+                QRectF(-rect.width() / 2, -rect.height() / 2, rect.width(), rect.height()),
+                tex,
+                QRectF(tex.rect()),
             )
+            if self._realism_level == "realistic":
+                # realistic 全量：手绘槽纹圈叠加（refined 跳过，防与烘焙沟槽打架）
+                painter.setPen(QPen(QColor(34, 34, 34, 70), 1))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                for i in range(4):
+                    f = 0.55 + i * 0.08
+                    painter.drawEllipse(
+                        QRectF(
+                            -rect.width() * f / 2,
+                            -rect.height() * f / 2,
+                            rect.width() * f,
+                            rect.height() * f,
+                        )
+                    )
+        else:
+            gradient = QRadialGradient(0, 0, rect.width() / 2)
+            gradient.setColorAt(0.0, QColor("#3a3a3a"))
+            gradient.setColorAt(1.0, QColor("#0d0d0d"))
+            painter.setBrush(gradient)
+            painter.setPen(QPen(QColor("#555555"), 1))
+            painter.drawEllipse(
+                QRectF(-rect.width() / 2, -rect.height() / 2, rect.width(), rect.height())
+            )
+            painter.setPen(QPen(QColor("#222222"), 1))
+            for i in range(4):
+                f = 0.55 + i * 0.08
+                painter.drawEllipse(
+                    QRectF(
+                        -rect.width() * f / 2,
+                        -rect.height() * f / 2,
+                        rect.width() * f,
+                        rect.height() * f,
+                    )
+                )
         painter.restore()
         self._paint_tonearm(painter, rect)
 
@@ -319,13 +354,24 @@ class DeckWidget(QWidget):
         # 磁带仓形态（PL002.3）：深色壳 + 中央观察窗（共享卷轴，半径随面内进度胀缩）
         # + 双飞轮（角度随转盘角加速旋转，播放视觉）+ 底部走带路径 + 四角螺丝
         painter.save()
-        # 外壳（深色渐变圆角矩形，拟磁带仓机身）
-        shell = QRadialGradient(rect.center(), rect.width() * 0.75)
-        shell.setColorAt(0.0, QColor("#3d3d46"))
-        shell.setColorAt(1.0, QColor("#1e1e26"))
-        painter.setBrush(shell)
-        painter.setPen(QPen(QColor("#55556a"), 1))
-        painter.drawRoundedRect(rect, 10, 10)
+        # 外壳（PL005.4：贴图打底裁圆角矩形；回退深色渐变，拟磁带仓机身）
+        shell_tex = texture_pixmap("cassette_shell") if self._texture_on else None
+        if shell_tex is not None:
+            shell_path = QPainterPath()
+            shell_path.addRoundedRect(rect, 10, 10)
+            painter.setClipPath(shell_path)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap(rect, shell_tex, QRectF(shell_tex.rect()))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor("#55556a"), 1))
+            painter.drawRoundedRect(rect, 10, 10)
+        else:
+            shell = QRadialGradient(rect.center(), rect.width() * 0.75)
+            shell.setColorAt(0.0, QColor("#3d3d46"))
+            shell.setColorAt(1.0, QColor("#1e1e26"))
+            painter.setBrush(shell)
+            painter.setPen(QPen(QColor("#55556a"), 1))
+            painter.drawRoundedRect(rect, 10, 10)
         # 四角螺丝
         painter.setBrush(QColor("#777788"))
         painter.setPen(QPen(QColor("#44445a"), 1))
@@ -399,25 +445,36 @@ class DeckWidget(QWidget):
         painter.restore()
 
     def _paint_cd(self, painter: QPainter, rect: QRectF) -> None:
-        # CD 碟舱形态（PL002.4）：银灰碟面 + OddEven 真镂空中心孔 + 封面环带 + 3 夹持爪 + 淡槽纹
+        # CD 碟舱形态（PL002.4 / PL005.4 贴图分层）：碟面（贴图含孔镂空，或 OddEven 矢量）
+        # + 封面环带 + 3 夹持爪 + 淡槽纹（realistic）
         center = rect.center()
         radius = rect.width() / 2
         painter.save()
         painter.translate(center)
         painter.rotate(self._angle)
-        # 碟面：OddEven 双圆路径（外缘 + 中心孔）——孔洞真透出窗底色（非画深色圆模拟）
-        disc = QPainterPath()
-        disc.addEllipse(QPointF(0, 0), radius, radius)
         hole_r = radius * 0.08
-        disc.addEllipse(QPointF(0, 0), hole_r, hole_r)
-        disc.setFillRule(Qt.FillRule.OddEvenFill)
-        disc_gradient = QRadialGradient(0, 0, radius)
-        disc_gradient.setColorAt(0.0, QColor("#e2e6ec"))
-        disc_gradient.setColorAt(0.6, QColor("#c8ccd4"))
-        disc_gradient.setColorAt(1.0, QColor("#7a8088"))
-        painter.setBrush(disc_gradient)
-        painter.setPen(QPen(QColor("#5a5f66"), 1))
-        painter.drawPath(disc)
+        disc_tex = texture_pixmap("cd_disc") if self._texture_on else None
+        if disc_tex is not None:
+            # 贴图打底：碟面照片纹理（彩虹反射 + 中心孔透明已烘焙），随转盘角旋转
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap(
+                QRectF(-radius, -radius, radius * 2, radius * 2),
+                disc_tex,
+                QRectF(disc_tex.rect()),
+            )
+        else:
+            # 碟面：OddEven 双圆路径（外缘 + 中心孔）——孔洞真透出窗底色（非画深色圆模拟）
+            disc = QPainterPath()
+            disc.addEllipse(QPointF(0, 0), radius, radius)
+            disc.addEllipse(QPointF(0, 0), hole_r, hole_r)
+            disc.setFillRule(Qt.FillRule.OddEvenFill)
+            disc_gradient = QRadialGradient(0, 0, radius)
+            disc_gradient.setColorAt(0.0, QColor("#e2e6ec"))
+            disc_gradient.setColorAt(0.6, QColor("#c8ccd4"))
+            disc_gradient.setColorAt(1.0, QColor("#7a8088"))
+            painter.setBrush(disc_gradient)
+            painter.setPen(QPen(QColor("#5a5f66"), 1))
+            painter.drawPath(disc)
         # 封面环带（r 22%..55% 环形裁剪内画封面；无封面画素色环 + 中心纹样）
         ring = QPainterPath()
         ring.addEllipse(QPointF(0, 0), radius * 0.55, radius * 0.55)
@@ -437,11 +494,12 @@ class DeckWidget(QWidget):
             painter.setPen(QPen(QColor("#6a6f76"), 1))
             painter.drawEllipse(QPointF(0, 0), radius * 0.34, radius * 0.34)
         painter.restore()
-        # 淡槽纹两圈（封面环带外缘的盘面细纹）
-        painter.setBrush(Qt.BrushStyle.NoBrush)
-        painter.setPen(QPen(QColor(90, 95, 102, 120), 1))
-        painter.drawEllipse(QPointF(0, 0), radius * 0.66, radius * 0.66)
-        painter.drawEllipse(QPointF(0, 0), radius * 0.78, radius * 0.78)
+        # 淡槽纹两圈（封面环带外缘的盘面细纹；refined 贴图下跳过防与烘焙纹理打架）
+        if not (disc_tex is not None and self._realism_level == "refined"):
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor(90, 95, 102, 120), 1))
+            painter.drawEllipse(QPointF(0, 0), radius * 0.66, radius * 0.66)
+            painter.drawEllipse(QPointF(0, 0), radius * 0.78, radius * 0.78)
         # 夹持爪（孔缘 3 个 120° 短爪）+ 中轴环
         painter.setPen(QPen(QColor("#4a4f56"), 1))
         painter.setBrush(QColor("#6a6f76"))
@@ -498,6 +556,8 @@ class DeckWidget(QWidget):
 #   _ANGLE_START/_ANGLE_RANGE 落针角与扫过角、_ANGLE_REST 静息角、拖拽钳制/命中半径
 # DeckWidget(QWidget): 唱机绘制（PL002 三形态分派：vinyl 转盘唱针 / cassette 磁带仓 / cd 碟舱）
 #   set_item_type(key, cover): 载体形态切换（未知键回退 vinyl；CD 附封面环带 pixmap）
+#   set_realism(level): 拟真度档位注入（PL005.4：贴图打底开关随 effects.json texture 键；
+#     refined 跳手绘纹理细节防打架，realistic 全量叠加）
 #   needle_drag_started/needle_dropped(float): 唱针交互信号（仅 vinyl；非 vinyl 命中直接失败）
 #   set_playing(playing): 定时器启停（拖拽中不抢唱针控制权）
 #   set_animations_enabled(enabled): 档位联动（拖拽属交互不受档位限制）
@@ -506,11 +566,13 @@ class DeckWidget(QWidget):
 #   _tick(): 转盘角速度惯性趋近（缓动启停）+ 唱针位置插值
 #   _visual_angle(): 渲染角（拖拽角优先，否则静息↔落针按 _tonearm_pos 插值）
 #   mousePress/Move/ReleaseEvent: 拖针交互（27px 命中 → atan2 解卷拖拽 → 有效窗落针/窗外取消）
-#   _paint_vinyl: 转盘槽纹 + _paint_tonearm（枢轴/配重/臂杆硬阴影/唱头）
-#   _paint_cassette_deck: 仓壳 + 观察窗（parts.draw_reel 双卷轴胀缩）+ 双飞轮 + 走带线 + 螺丝
-#   _paint_cd: OddEven 真镂空碟面 + 封面环带（22%..55%）+ 3 夹持爪 + 淡槽纹
+#   _paint_vinyl: 贴图盘面（回退矢量槽纹）+ realistic 槽纹圈叠加 + _paint_tonearm
+#   _paint_cassette_deck: 仓壳（贴图裁圆角，回退渐变）+ 观察窗卷轴 + 双飞轮 + 走带线 + 螺丝
+#   _paint_cd: 贴图碟面（回退 OddEven 镂空）+ 封面环带（22%..55%）+ 3 夹持爪 + 淡槽纹（refined 跳过）
 #   angle/tonearm_position: 状态只读（验证断言）
 #   设计理由：形态随载体切换消除语义冲突（磁带时右侧不再是无唱针的黑胶转盘）；
-#     拖拽暂停/落针跳转全部经信号外抛（控件零业务依赖）；卷轴/带卷物理复用 ui/widgets/parts
+#     拖拽暂停/落针跳转全部经信号外抛（控件零业务依赖）；卷轴/带卷物理与贴图加载复用 ui/widgets/parts；
+#     贴图缺失回退矢量绘制（装饰层不阻断，容错登记制）
 #   关联配置：config/static/ui.json（animation.record_spin_ms/tonearm_drop_ms/spin_tick_ms）；
-#     类型转速 item_types.json spin_ms_per_rev（set_spin_ms 注入）
+#     类型转速 item_types.json spin_ms_per_rev（set_spin_ms 注入）；
+#     effects.json levels[].texture（贴图开关）+ data/textures/*.png（PL005.3 烘焙产物）

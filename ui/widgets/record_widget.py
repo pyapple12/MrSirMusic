@@ -3,7 +3,7 @@
 
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, QTimer
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
 from PySide6.QtGui import (
     QColor,
     QLinearGradient,
@@ -23,6 +23,8 @@ from ui.widgets.parts import (
     REEL_RADIUS_MIN,
     draw_reel,
     reel_factor,
+    texture_enabled,
+    texture_pixmap,
 )
 from utils.logger import get_logger
 
@@ -52,6 +54,8 @@ class RecordWidget(QWidget):
         self._reel_angle_l = 0.0  # 左卷轴角度（度）
         self._reel_angle_r = 0.0  # 右卷轴角度（度）
         self._wind = 0.0  # wind 方向（scrub 拖动 ±1，静止 0）
+        self._texture_on = False  # PL005.5 贴图打底开关（set_realism 随档位更新）
+        self._realism_level = ""  # 当前拟真度档位名（realistic 槽纹叠加判定）
         self._tick_ms = int(_SC.ui.get("spin_tick_ms", 30))
         self.timer = QTimer(self)
         self.timer.setInterval(self._tick_ms)
@@ -104,6 +108,13 @@ class RecordWidget(QWidget):
         elif self._playing and self._is_cassette():
             self.timer.start()
 
+    def set_realism(self, level: str) -> None:
+        # 拟真度档位注入（PL005.5）：贴图打底开关随 effects.json levels[level].texture；
+        # 与 deck_widget.set_realism 同构（refined 贴图打底、realistic 叠手绘槽纹）
+        self._realism_level = str(level)
+        self._texture_on = texture_enabled(self._realism_level)
+        self.update()
+
     def set_reel_progress(self, fraction: float) -> None:
         # H6 面内进度注入：卷带胀缩映射源（左卷满→右卷满；越界钳制）
         if isinstance(fraction, (int, float)) and not isinstance(fraction, bool):
@@ -152,25 +163,43 @@ class RecordWidget(QWidget):
         painter.end()
 
     def _paint_record(self, painter: QPainter, rect: QRectF) -> None:
-        # 黑胶/CD：径向渐变圆盘 + 同心槽纹 + 中心封面圆
+        # 黑胶/CD：贴图盘面（PL005.5，回退径向渐变）+ 槽纹（realistic）+ 中心封面圆
         painter.save()
-        gradient = QRadialGradient(rect.center(), rect.width() / 2)
-        gradient.setColorAt(0.0, QColor("#3a3a3a"))
-        gradient.setColorAt(1.0, QColor("#0d0d0d"))
-        painter.setBrush(gradient)
-        painter.setPen(QPen(QColor("#555555"), 1))
-        painter.drawEllipse(rect)
-        # 槽纹（同心细圈）
-        painter.setPen(QPen(QColor("#222222"), 1))
-        for i in range(4):
-            factor = 0.55 + i * 0.08
-            r = QRectF(
-                rect.center().x() - rect.width() * factor / 2,
-                rect.center().y() - rect.height() * factor / 2,
-                rect.width() * factor,
-                rect.height() * factor,
-            )
-            painter.drawEllipse(r)
+        tex = texture_pixmap("vinyl_disc") if self._texture_on else None
+        if tex is not None:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap(rect, tex, QRectF(tex.rect()))
+            if self._realism_level == "realistic":
+                # realistic 全量：手绘槽纹圈叠加（refined 跳过）
+                painter.setPen(QPen(QColor(34, 34, 34, 70), 1))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                for i in range(4):
+                    factor = 0.55 + i * 0.08
+                    r = QRectF(
+                        rect.center().x() - rect.width() * factor / 2,
+                        rect.center().y() - rect.height() * factor / 2,
+                        rect.width() * factor,
+                        rect.height() * factor,
+                    )
+                    painter.drawEllipse(r)
+        else:
+            gradient = QRadialGradient(rect.center(), rect.width() / 2)
+            gradient.setColorAt(0.0, QColor("#3a3a3a"))
+            gradient.setColorAt(1.0, QColor("#0d0d0d"))
+            painter.setBrush(gradient)
+            painter.setPen(QPen(QColor("#555555"), 1))
+            painter.drawEllipse(rect)
+            # 槽纹（同心细圈）
+            painter.setPen(QPen(QColor("#222222"), 1))
+            for i in range(4):
+                factor = 0.55 + i * 0.08
+                r = QRectF(
+                    rect.center().x() - rect.width() * factor / 2,
+                    rect.center().y() - rect.height() * factor / 2,
+                    rect.width() * factor,
+                    rect.height() * factor,
+                )
+                painter.drawEllipse(r)
         # 中心封面圆
         cover_size = rect.width() * 0.4
         cover_rect = QRectF(
@@ -189,14 +218,26 @@ class RecordWidget(QWidget):
         painter.restore()
 
     def _paint_cassette(self, painter: QPainter, rect: QRectF) -> None:
-        # 磁带盒：圆角矩形渐变壳 + 上窗口（半透明）+ 底部标签（色块占位；B3.2 注释修正）
+        # 磁带盒：壳体贴图（PL005.5，回退渐变）+ 上窗口（半透明）+ 底部标签
         painter.save()
-        gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
-        gradient.setColorAt(0.0, QColor("#4a4a55"))
-        gradient.setColorAt(1.0, QColor("#23232a"))
-        painter.setBrush(gradient)
-        painter.setPen(QPen(QColor("#666677"), 1))
-        painter.drawRoundedRect(rect, 10, 10)
+        shell_tex = texture_pixmap("cassette_shell") if self._texture_on else None
+        if shell_tex is not None:
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.save()
+            shell_path = self._round_rect_path(rect, 10)
+            painter.setClipPath(shell_path)
+            painter.drawPixmap(rect, shell_tex, QRectF(shell_tex.rect()))
+            painter.restore()
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.setPen(QPen(QColor("#666677"), 1))
+            painter.drawRoundedRect(rect, 10, 10)
+        else:
+            gradient = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            gradient.setColorAt(0.0, QColor("#4a4a55"))
+            gradient.setColorAt(1.0, QColor("#23232a"))
+            painter.setBrush(gradient)
+            painter.setPen(QPen(QColor("#666677"), 1))
+            painter.drawRoundedRect(rect, 10, 10)
         # 上窗口
         win = QRectF(
             rect.left() + rect.width() * 0.25,
@@ -260,14 +301,15 @@ class RecordWidget(QWidget):
 #   set_animations_enabled(enabled): 档位联动（关闭冻结卷轴）
 #   set_reel_progress(fraction): 面内进度注入（卷带胀缩）
 #   set_wind(direction): scrub 风向（±1 快进/倒带视觉，0 复位）
+#   set_realism(level): 拟真度档位注入（PL005.5：贴图开关随 effects.json texture 键，与 deck 同构）
 #   _tick(): 恒线速卷轴动画帧（角速度 = 基准/半径因子，卷多转慢）
 #   _is_cassette(): 当前物品是否 rect 形态
 #   paintEvent: 按 shape 分派（circle → _paint_record，rect → _paint_cassette）+ 效果器叠加
-#   _paint_record: 径向渐变圆盘 + 4 圈槽纹 + 中心封面圆（QPainterPath 圆形裁剪）
-#   _paint_cassette: 圆角渐变壳 + 半透明上窗（内绘卷轴）+ 底部封面标签
+#   _paint_record: 贴图盘面（回退径向渐变）+ realistic 槽纹圈 + 中心封面圆（圆形裁剪）
+#   _paint_cassette: 壳体贴图（回退渐变）+ 半透明上窗（内绘卷轴）+ 底部封面标签
 #   _paint_reels: 双卷带圆（胀缩 + 缠绕纹理）+ 花键 hub 3 齿 + 走带路径
 #   pixmap_image(): grab 渲染结果（验证用）
-#   设计理由：绘制纯 QPainter，质感来自渐变/阴影；封面经 resolve_cover 兜底；
+#   设计理由：绘制纯 QPainter，质感来自贴图（PL005.5，缺失回退渐变）+ 阴影；封面经 resolve_cover 兜底；
 #     动画定时器仅由 set_playing(True) 启动（置物架卡片保持静态，无批量 tick 开销）
 #   关联配置：ItemType.shape（item_types.json）、封面服务（modules/cover）、
-#     ui.json spin_tick_ms（动画帧间隔）
+#     ui.json spin_tick_ms（动画帧间隔）、effects.json levels[].texture（贴图开关）
