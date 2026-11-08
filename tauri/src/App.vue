@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// App 壳（PL008）：Tabs 双视图（物品库/置物架）+ 右键菜单 + 双对话框 + 拖放/快捷键 + 库同步
-// 状态流：桥事件（state/track/progress）与库命令（library_changed→重取，保留旧视图直到成功）驱动
-import { onMounted, ref } from "vue"
+// App 壳（PL009）：双视图管理面 + 拟物唱机列（DeckStage/磨损/滑条）+ Web Audio 音效 + 库同步
+// 音效语义（ui/sounds.py 平移）：底噪循环随播放态启停（vinyl 门控）、落针在播放迁移沿、磁带换曲机械声
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import {
   onSidecarDead,
   onSidecarEvent,
@@ -9,9 +9,12 @@ import {
   sidecarCmd,
 } from "./lib/ipc"
 import { applyTheme } from "./lib/theme"
+import { soundKit } from "./lib/sounds"
 import type {
   Bootstrap,
+  EffectLevel,
   ItemDict,
+  ItemTypeConfig,
   ProgressData,
   TrackChangedData,
   UserConfigData,
@@ -29,19 +32,43 @@ const items = ref<ItemDict[]>([])
 const loading = ref(true)
 const dead = ref(false)
 const playing = ref(false)
-const currentTrack = ref<{ title: string; artist: string } | null>(null)
+const currentTrack = ref<TrackDict | null>(null)
+const currentItemId = ref<string | null>(null)
+const sideOffset = ref<number | null>(null)
+const sideTotal = ref<number | null>(null)
 const progress = ref<ProgressData>({ position_ms: 0, duration_ms: 0 })
 const userConfig = ref<UserConfigData>({ realism_level: "refined", auto_flip: false })
-const effectLevels = ref<Record<string, import("./lib/types").EffectLevel>>({})
-const itemTypes = ref<Record<string, import("./lib/types").ItemTypeConfig>>({})
+const effectLevels = ref<Record<string, EffectLevel>>({})
+const itemTypes = ref<Record<string, ItemTypeConfig>>({})
+const assetRoot = ref("")
 const activeTab = ref<"library" | "shelf">("library")
+const lastState = ref("stopped")
 
-// 对话框/菜单/模态状态
+// 对话框/菜单/模态状态（PL008 语义保留）
 const showImport = ref(false)
 const showSettings = ref(false)
 const contextState = ref<{ x: number; y: number; item: ItemDict } | null>(null)
 const renameState = ref<{ item: ItemDict } | null>(null)
 const deleteState = ref<{ item: ItemDict } | null>(null)
+
+const currentItem = computed(
+  () => items.value.find((item) => item.id === currentItemId.value) ?? null,
+)
+
+// 面内比例（deck_view._side_fraction 同语义）：面时长可用用面内，否则退单曲内
+const sideFraction = computed(() => {
+  const posSec = progress.value.position_ms / 1000
+  if (sideOffset.value !== null && sideTotal.value && sideTotal.value > 0) {
+    return Math.min(1, Math.max(0, (sideOffset.value + posSec) / sideTotal.value))
+  }
+  if (progress.value.duration_ms > 0) {
+    return Math.min(
+      1,
+      Math.max(0, posSec / (progress.value.duration_ms / 1000)),
+    )
+  }
+  return 0
+})
 
 // 消息条（瞬态提示：info/error，4s 自清）
 const message = ref<{ text: string; kind: "info" | "error" } | null>(null)
@@ -53,28 +80,53 @@ function showMessage(text: string, kind: "info" | "error" = "info") {
   messageTimer = setTimeout(() => (message.value = null), 4000)
 }
 
+function itemTypeOf(itemId: string | null): string | null {
+  const item = items.value.find((i) => i.id === itemId)
+  return item?.type.key ?? null
+}
+
 onMounted(async () => {
   // 事件先订阅（防 bootstrap 前丢事件），再取快照
   await onSidecarEvent((evt) => {
     if (evt.event === "playback_state") {
       const data = evt.data as { state: string }
       playing.value = data.state === "playing"
+      // H3 音效联动：底噪启停 + 播放迁移沿落针（vinyl 门控）
+      soundKit.setActive(data.state === "playing")
+      if (data.state === "playing" && lastState.value !== "playing" && isVinyl()) {
+        soundKit.playNeedleDrop()
+      }
+      lastState.value = data.state
     } else if (evt.event === "track_changed") {
       const data = evt.data as TrackChangedData
       currentTrack.value = data.track
-        ? { title: data.track.title, artist: data.track.artist }
-        : null
+      sideOffset.value = data.side_offset_seconds
+      sideTotal.value = data.side_total_seconds
+      // H3：播放中磁带换曲机械声
+      if (
+        playing.value &&
+        itemTypeOf(currentItemId.value) === "cassette"
+      ) {
+        soundKit.playTapeMech()
+      }
     } else if (evt.event === "progress") {
       progress.value = evt.data as ProgressData
     } else if (evt.event === "error") {
-      // parity ⑧：缺失文件等播放错误 → 消息条提示（对齐 Qt message_label 语义，不崩溃）
+      // parity ⑧：缺失文件等播放错误 → 消息条提示（不崩溃）
       const data = evt.data as { category?: string; message?: string }
       showMessage(`提示：${data?.message ?? "播放错误"}`, "error")
+    } else if (evt.event === "side_flipped") {
+      // H3：黑胶翻面落针音
+      if (isVinyl()) soundKit.playNeedleDrop()
     } else if (evt.event === "library_changed") {
       // PL008.4：库同步——重取（保留旧视图直到成功，沿用既有刷新原则）
       refreshLibrary()
     } else if (evt.event === "config_changed") {
       userConfig.value = evt.data as UserConfigData
+      soundKit.setLevel(
+        (effectLevels.value[userConfig.value.realism_level] as EffectLevel)
+          ?.ambience_intensity ?? 0.4,
+      )
     }
   })
   await onSidecarDead(() => {
@@ -87,18 +139,28 @@ onMounted(async () => {
     userConfig.value = boot.user_config
     effectLevels.value = boot.effects.levels as Record<
       string,
-      import("./lib/types").EffectLevel
+      EffectLevel
     >
     itemTypes.value = boot.item_types as Record<
       string,
-      import("./lib/types").ItemTypeConfig
+      ItemTypeConfig
     >
+    assetRoot.value = boot.app_root ?? ""
+    soundKit.setAssetRoot(assetRoot.value)
+    soundKit.setLevel(
+      (effectLevels.value[userConfig.value.realism_level] as EffectLevel)
+        ?.ambience_intensity ?? 0.4,
+    )
   } catch (reason) {
     dead.value = true
     console.warn("bootstrap 失败:", reason)
   }
   loading.value = false
 })
+
+function isVinyl(): boolean {
+  return itemTypeOf(currentItemId.value) === "vinyl"
+}
 
 async function refreshLibrary() {
   // 库重取：请求成功才替换 items（失败保留旧视图）
@@ -111,8 +173,10 @@ async function refreshLibrary() {
 }
 
 async function playItem(item: ItemDict) {
-  // 点卡片 → 载入 + 播放（PL007.5 端到端闭环核心交互）
+  // 点卡片/菜单播放 → 载入 + 播放 + 音效载体切换（H3）
   try {
+    currentItemId.value = item.id
+    soundKit.setMediaKind(item.type.key)
     await sidecarCmd("load_item", { item_id: item.id })
     await sidecarCmd("transport_play")
   } catch (reason) {
@@ -123,16 +187,13 @@ async function playItem(item: ItemDict) {
 
 async function dropPlay(itemId: string) {
   // 卡片拖入唱机放置区（PL008.4）
-  try {
-    await sidecarCmd("load_item", { item_id: itemId })
-    await sidecarCmd("transport_play")
-  } catch (reason) {
-    const info = parseSidecarError(reason)
-    showMessage(`播放失败（${info.category}）：${info.message}`, "error")
+  const item = items.value.find((i) => i.id === itemId)
+  if (item) {
+    await playItem(item)
   }
 }
 
-// ── 右键菜单动作（PL008.1：播放/编辑/重新刻录/删除，对齐 Qt 右键四项） ─────────────
+// ── 右键菜单动作（PL008.1） ─────────────────────────────────────────────────────
 function menuFor(item: ItemDict): MenuItem[] {
   return [
     { label: "播放", action: () => playItem(item) },
@@ -143,7 +204,6 @@ function menuFor(item: ItemDict): MenuItem[] {
 }
 
 async function regenerateItem(item: ItemDict) {
-  // 重新刻录：直接执行（对齐 Qt 语义——GenerateError 分类提示）
   try {
     const fresh = await sidecarCmd<{ id: string; name: string }>("regenerate", {
       item_id: item.id,
@@ -177,13 +237,16 @@ async function submitDelete(item: ItemDict) {
   }
 }
 
-// ── 快捷键（PL008.4：Space/←/→/F，对齐 Qt PL003.5；输入类焦点豁免） ────────────────
+// ── 快捷键（PL008.4：Space/←/→/F，输入类焦点豁免） ─────────────────────────────
 function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
   if (!el) return false
   const tag = el.tagName
   return (
-    tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    el.isContentEditable
   )
 }
 
@@ -208,9 +271,10 @@ onMounted(() => {
   window.addEventListener("keydown", onKeydown)
 })
 
-function onDropPlay(itemId: string) {
-  dropPlay(itemId)
-}
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", onKeydown)
+  soundKit.setActive(false)
+})
 </script>
 
 <template>
@@ -259,13 +323,21 @@ function onDropPlay(itemId: string) {
     />
   </main>
   <DeckBar
+    :item="currentItem"
     :playing="playing"
     :track="currentTrack"
-    :position-ms="progress.position_ms"
-    :duration-ms="progress.duration_ms"
+    :progress="progress"
+    :side-fraction="sideFraction"
+    :realism-level="userConfig.realism_level"
+    :effect-levels="effectLevels"
+    :asset-root="assetRoot"
+    :item-types="itemTypes"
     @toggle="playing ? sidecarCmd('transport_pause') : sidecarCmd('transport_play')"
     @flip="sidecarCmd('transport_flip')"
-    @drop-item="onDropPlay"
+    @drop-item="dropPlay"
+    @seek="(s) => sidecarCmd('seek', { seconds: s })"
+    @seek-side="(f) => sidecarCmd('seek_side', { fraction: f })"
+    @needle-drag-started="sidecarCmd('transport_pause')"
   />
   <ContextMenu
     v-if="contextState"

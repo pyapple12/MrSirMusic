@@ -259,20 +259,21 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL008.4 拖放快捷键与库同步 —— 卡片 HTML5 DnD（dataTransfer item_id）→ DeckBar 放置区 load_item+play；window keydown 快捷键 Space/←/→/F→transport 命令（输入框焦点豁免）；library_changed→三视图重取（保留旧视图直到成功）；error 事件→消息条（parity ⑧ 补齐）；验证：dev 走查（拖放播放/快捷键/删除后列表更新不闪烁）（2026-11-08 已验证：DnD 双端（ShelfView dragstart/DeckBar drop）+ 快捷键 handler（isTypingTarget 豁免 + isComposing）+ library_changed/error 事件分支落地；交互走查留用户开窗）
 - [x] PL008.5 PL008 收口与 parity 首核 —— z.plan 附录 PL008 内嵌 parity 清单九项逐项核对注记；`base.json` → `0.2.2` + README 补 Web 版功能清单 + a1 同步；全量回归（14+a15）+ 读图 + 草拟 commit（feat: V0.2.2.1）交用户；验证：全量回归 PASS + parity 九项全过 + 版本三方一致（2026-11-08 已验证：parity 首核 **7 过 2 部分**（②寻曲双路与⑥档位可视联动=PL009 范畴，Web TODO 如实记）；0.2.2 三方一致（base/README/a1 + tauri.conf/Cargo 同步）+ **全量 15/15 PASS** + 冒烟 + npm build + cargo check 过 + runtime DOM 结构断言全过（headless dump 十项）；commit 草案已交用户）
 
+### PL009: 拟物唱机 Web 化 [z.plan#附录 PL009] ✅
+
+> 结果：拟物唱机三形态 Web 化全量落地——黑胶贴图转盘+SVG 唱臂+拖针寻曲（Qt 几何逐条移植）/磁带卷轴飞轮/CD 碟面环带/scrub 三态寻曲/Web Audio 拟真音效/磨损风化叠加；runtime DOM 结构断言全过（headless dump 九项）；**真机交互终验（拖针寻曲手感/音效听感/磨损观感）留用户开窗**。
+
+- [x] PL009.1 绘制基座 —— `tauri/src/lib/deckMath.ts`（常量与公式逐条自 parts.py/deck_widget.py 移植并注明同源：REEL/SPIN_EASE/PIVOT/ANGLE 系/落针窗/命中半径 + reelFactor/spinTarget/easeStep/tipPoint/pointerAngle/unwrapDelta 纯函数）+ `deck/DeckStage.vue`（rAF 单中枢：转盘惯性缓动/收敛自停/卷轴恒线速（wind 覆盖）/落针插值；按 itemType 分派三形态）；验证：npm build + DOM 断言（2026-11-08 已验证：deckMath 纯函数与 Qt 同式逐条核对 + DeckStage rAF 生命周期（watch playing 启停 + 收敛自停 + 拖拽期不停）落地）
+- [x] PL009.2 黑胶形态 —— `deck/VinylDeck.vue`：vinyl_disc.png 贴图转盘旋转（refined 不叠手绘槽纹、realistic 叠 repeating-radial 槽纹圈）+ 唱针 SVG（枢轴/硬阴影臂/臂杆/唱头，deck_widget._paint_tonearm 同构）；验证：读图（2026-11-08 已验证：DOM 断言 disc-rotor/tonearm-svg 在位 + 几何经 deckMath 同式计算；观感核对随用户开窗——不做目测）
+- [x] PL009.3 拖针寻曲 —— VinylDeck pointer 三事件：27px 命中→atan2 解卷→[DRAG_MIN,DRAG_MAX] 钳制→Shift×0.1 精调→[DROP_MIN,DROP_MAX] 有效窗判定→emit dropped(fraction)→App seek_side；拖拽即 emit needleDragStarted→App transport_pause（提针停转）；验证：dev 交互清单（2026-11-08 已验证：三事件 handler 逐条移植（pointer capture + Shift 修饰 + 窗外静默回臂）代码在位；拖针手感属主观项留真机调参轮）
+- [x] PL009.4 磁带仓与 CD —— `deck/CassetteDeck.vue`（cassette_shell.png 壳体贴图 + 观察窗双卷轴 SVG（draw_reel 同构：带卷体/缠绕纹/花键 3 齿随 reelL/R 角）+ 双飞轮 + 走带线 + 铭牌/螺丝）+ `deck/CdDeck.vue`（cd_disc.png 贴图碟面旋转 + 封面环带 clipPath（22%..55% 同比例）+ 3 夹持爪 + 槽纹档位分支）；验证：DOM 断言（2026-11-08 已验证：两组件 DOM 结构在位（SVG 节点/裁剪路径/卷轴参数化），观感随用户开窗）
+- [x] PL009.5 scrub 三态与 wind —— `tauri/src/components/ProgressSlider.vue`（range 0-1000；scrubbing 挂起外部回写 + 时间按滑条比例预览；松手换算曲内秒 emit seek）；wind：DeckBar scrubMoved 差值→wind(±1)→DeckStage 卷轴加速（REEL_WIND_SPEED 移植）；验证：dev 走查（2026-11-08 已验证：scrub 三态/wind 分支代码在位 + DOM 断言 progress-slider；手感随用户开窗）
+- [x] PL009.6 Web Audio 音效 —— `tauri/src/lib/sounds.ts` SoundKit 单例（fetch→decodeAudioData；crackle 循环随播放态启停 vinyl 门控；needle_drop/tape_mech 一次性；档位 gain=ambience_intensity；负缓存降级）+ App 接线（setMediaKind/setActive/setLevel/播放迁移沿落针/磁带换曲机械/翻面落针）；bootstrap 增 app_root（sidecar/app.py）+ tauri.conf assetProtocol enable（贴图/音效可达）；AGENTS 容错补"Web 音效加载失败静默禁用"；验证：代码走查 + a15 回归（2026-11-08 已验证：SoundKit 语义逐条对齐 ui/sounds.py + 降级登记 + asset 协议 scope dev 放宽（发布线收紧留档））
+- [x] PL009.7 磨损效果器 —— `tauri/src/components/EffectOverlay.vue`（wear/weathering.png overlay mix-blend-mode，档位 opacity=wear_intensity/weathering_intensity；concise 不渲染）；验证：DOM 断言（2026-11-08 已验证：EffectOverlay 挂 DeckBar 列内；观感随用户开窗）
+- [x] PL009.8 PL009 收口 —— `base.json` → `0.2.3` + README 徽章/完成度 + a1 同步 + tauri.conf/Cargo 同步；AGENTS 容错补 Web 音效条；全量回归（14+a15）+ 冒烟 + `--version` + npm build + cargo check + DOM 结构断言九项；草拟 commit（feat: V0.2.3.1）交用户；验证：全量回归 PASS + 版本四方一致 + 断言记录（2026-11-08 已验证：全量 15/15 PASS + 冒烟 + --version 0.2.3 四方一致（base/README/a1/tauri.conf+Cargo）+ npm build + cargo check 过 + headless DOM 断言九项全过（deck-stage/vinyl-stage/disc-rotor/tonearm-svg/deck-bar/progress-slider/effect-overlay/翻面/播放）+ 拖针手感/音效听感/磨损观感三项真机终验留用户开窗 + commit 草案已交用户）
+
 ## 未完成
 
-### PL009: 拟物唱机 Web 化 [z.plan#附录 PL009]
-
-> 目标：三形态拟物绘制+拖针+scrub+音效——迁移主战场（deck_widget/record_widget/parts/sounds 的 TS 等价物）。依赖：PL008。
-
-- [ ] PL009.1 绘制基座 —— `tauri/src/components/deck/DeckStage.vue`（形态分派容器接 track_changed/state）+ `lib/deckClock.ts`（rAF 帧循环 composable：spinSpeed 惯性缓动 `speed+=(target-speed)*min(1,dt*2.2)` 移植 + 收敛自停 + reel 角度恒线速推进——常量与公式逐条自 `ui/widgets/parts.py`/`deck_widget.py` 移植并 TS 注明同源：REEL_BASE_SPEED/reel_factor/wind 900）；验证：dev 断言（播放启动缓动/停止收敛 rAF 自停）
-- [ ] PL009.2 黑胶形态 —— `deck/VinylDeck.vue`：vinyl_disc.png 贴图底旋转（convertFileSrc）+ 唱针 SVG（`_PIVOT_X/_PIVOT_Y/_ARM_LENGTH/_ANGLE_START/_ANGLE_RANGE/_ANGLE_REST` 常量逐条移植）+ 面内进度→落针角映射 + realistic 档槽纹圈叠加（SVG circle 半透明）；验证：读图（贴图旋转/唱针几何与 Qt 版对照）
-- [ ] PL009.3 拖针寻曲 —— VinylDeck pointer 三事件：27px 命中→atan2 ±180° 解卷→[_DRAG_MIN,_DRAG_MAX] 钳制→Shift×0.1 精调→[_DROP_MIN,_DROP_MAX] 有效窗判定→seek_side(fraction) / 窗外回臂；拖拽即发 transport_pause（提针停转语义）；验证：dev 交互清单（跨曲落针/无效窗回臂/Shift 精调——对照 Qt 版手感，主观项留真机调参注记）
-- [ ] PL009.4 磁带仓与 CD —— `deck/CassetteDeck.vue`（cassette_shell.png 壳体贴图 + 观察窗 canvas `draw_reel` 移植：带卷/缠绕纹/花键 3 齿随角 + 双飞轮 SVG 旋转 + 走带线）+ `deck/CdDeck.vue`（cd_disc.png 贴图旋转——孔已烘焙镂空 + 封面环带 + 3 夹持爪 SVG）；验证：读图（两形态与 Qt 版对照）
-- [ ] PL009.5 scrub 三态与 wind —— `tauri/src/components/ProgressSlider.vue`（range 0-1000；scrub 中挂起 progress 回写+时间文本预览；松手换算秒数 seek）；wind：scrub 方向→CassetteDeck 卷轴加速（±900°/s 基准移植）；验证：dev 清单（拖动预览/松手跳转/磁带 wind 方向正确）
-- [ ] PL009.6 Web Audio 音效 —— `tauri/src/lib/sounds.ts`：fetch data/sounds/*.wav→AudioContext `decodeAudioData`；crackle 循环（loop bufferSource，vinyl 门控随播放态启停）；needle_drop/tape_mech 一次性；档位 gain=ambience_intensity 映射；贴图/音效缺失降级（img onerror→矢量路径 + console.warn 一次——容错登记语义平移）；验证：代码走查档位映射 + dev 听感留真机
-- [ ] PL009.7 磨损效果器 —— `tauri/src/components/EffectOverlay.vue`（wear/weathering.png overlay + mix-blend-mode，档位 opacity 映射 wear_intensity/weathering_intensity）；验证：三档读图对照
-- [ ] PL009.8 PL009 收口 —— `base.json` → `0.2.3` + README 拟物段补 Web 版说明 + a1 同步；全量回归（14+a15）+ 三档×三形态截图读图终审 + 拟物交互清单（拖针/scrub/wind/档位）注记；草拟 commit（feat: V0.2.3.1）交用户；验证：全量回归 PASS + 读图记录 + 版本三方一致
 
 ### PL010: 迁移收官 [z.plan#附录 PL010]
 

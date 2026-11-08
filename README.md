@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.2.2-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.2.3-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
@@ -89,7 +89,7 @@ npm install
 npm run tauri dev
 ```
 
-当前完成度：物品库（两行列表 + 详情 + 右键菜单）与置物架双视图、导入对话框（原生文件多选/四分组/业务错误提示）、设置对话框（三档与自动翻面）、卡片拖入唱机播放、快捷键（空格/←/→/F）、侧车崩溃自动重启。寻曲（进度拖动/唱针）与拟物唱机在 PL009。打包安装器不做（后续发布线）。
+当前完成度：物品库与置物架双视图、导入对话框（原生文件多选/四分组/业务错误提示）、设置对话框（三档与自动翻面）、卡片拖入唱机播放、快捷键（空格/←/→/F）、**拟物唱机三形态 Web 化**（黑胶贴图转盘+唱针拖拽寻曲/磁带卷轴飞轮/CD 碟面环带、scrub 寻曲、Web Audio 拟真音效、磨损风化叠加）、侧车崩溃自动重启。打包安装器不做（后续发布线）。
 
 ## 项目结构
 
