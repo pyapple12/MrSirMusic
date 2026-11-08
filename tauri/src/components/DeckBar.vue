@@ -12,7 +12,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "toggle"): void
+  (e: "flip"): void
+  (e: "dropItem", itemId: string): void
 }>()
+
+const DND_MIME = "application/x-mrsir-item-id"
+
+function onDrop(event: DragEvent) {
+  // PL008.4：卡片拖入唱机放置区 → 解析物品 id 上抛（路由方 load+play）
+  const itemId = event.dataTransfer?.getData(DND_MIME)
+  if (itemId) {
+    emit("dropItem", itemId)
+  }
+}
 
 // 进度百分比（时长未知 → 0；PROGRESS 事件驱动，scrub 寻曲 PL009）
 const percent = computed(() => {
@@ -32,7 +44,7 @@ function fmtTime(ms: number): string {
 </script>
 
 <template>
-  <aside class="deck-bar">
+  <aside class="deck-bar" @dragover.prevent @drop="onDrop">
     <div>
       <div class="track-title">{{ track?.title ?? "未载入物品" }}</div>
       <div class="track-artist">{{ track?.artist || "" }}</div>
@@ -43,8 +55,11 @@ function fmtTime(ms: number): string {
     <div class="time-row">
       {{ fmtTime(positionMs) }} / {{ fmtTime(durationMs) }}
     </div>
-    <button @click="emit('toggle')">
-      {{ playing ? "暂停" : "播放" }}
-    </button>
+    <div class="deck-btn-row">
+      <button @click="emit('toggle')">
+        {{ playing ? "暂停" : "播放" }}
+      </button>
+      <button @click="emit('flip')">翻面</button>
+    </div>
   </aside>
 </template>

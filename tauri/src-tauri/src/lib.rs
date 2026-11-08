@@ -6,6 +6,7 @@ use sidecar::{start_sidecar, kill_child, SidecarState};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState::default())
         .invoke_handler(tauri::generate_handler![sidecar::sidecar_cmd])
         .setup(move |app| {

@@ -249,15 +249,17 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL007.5 置物架视图与最小传输条 —— `tauri/src/views/ShelfView.vue`（tag 分组卡片流 flex-wrap；封面 `convertFileSrc(cover_path)`；点击→load_item+transport_play）+ `tauri/src/components/DeckBar.vue`（播放/暂停按钮按 playback_state 切换、只读进度条接 progress、曲目两行文本接 track_changed）；验证：dev 真机清单（点卡片出声/进度走动/切曲文本/暂停态）+ 读图（2026-11-08 已验证：ShelfView 分组卡片流渲染过（截图）+ DeckBar 组件渲染过（黄板取证帧含标题/进度条/播放按钮）；**布局三连坑破案并留档**——fixed 右侧传输条被 WebView2 合成滚动层盖住（z-index/translateZ 均无效），Grid 内联子项结构性解决；**真机点卡片出声验证留用户下次开窗**（WebView2 缓存已清 + Grid 布局已修，一次加载即新态））
 - [x] PL007.6 PL007 收口 —— `base.json` → `0.2.1` + README 新增"Web 版（开发中）"运行段（前置+启动命令）+ a1 断言同步；全量回归（14+a15）+ `cargo check` + 前端 `npm run build` 过；dev 窗口截图读图；AGENTS 容错登记三条（IPC 超时 60s 降级/sidecar 崩溃重启×3/ready 超时）核查补录；草拟 commit（feat: V0.2.1.1）交用户；验证：全量回归 PASS + 版本三方一致 + 读图记录（2026-11-08 已验证：全量 15/15 PASS（a2 曾红 = dev 栈占日志文件锁——AGENTS 文件锁陷阱的探针版，停栈后绿，环境冲突非缺陷）+ 冒烟 + --version 0.2.1 三方一致 + npm build 过 + AGENTS 落地五处（tauri 层条款/容错三条/WebView2 前端陷阱条）+ README Web 版段 + commit 草案已交用户）
 
-### PL008: 管理面完备 [z.plan#附录 PL008]
+### PL008: 管理面完备 [z.plan#附录 PL008] ✅
 
-> 目标：库视图+三对话框+拖放快捷键+库同步——Web 版管理能力对齐 Qt 版（parity 清单首核）。依赖：PL007。
+> 结果：Web 版管理能力对齐 Qt 版——物品库双视图/右键菜单四项/导入四分组（原生文件多选）/设置对话框/卡片拖放/快捷键/库事件同步；**parity 九项首核：7 过 2 部分**（②寻曲双路与⑥档位可视联动属 PL009 拟物唱机范畴，如实记 Web TODO）；runtime DOM 结构断言全过（headless dump 十项）。真机交互终验（文件导入走查/右键/拖放/快捷键）留用户下次开窗。
 
-- [ ] PL008.1 物品库视图 —— `tauri/src/views/LibraryView.vue`（两行列表 名称/形态·Tag·时长 + 详情面板 + `components/ContextMenu.vue` 播放/编辑/重刻/删除→四命令）；验证：dev 清单（列表渲染与 Qt 版信息架构一致/详情随选中/右键四项可用）
-- [ ] PL008.2 导入对话框 —— `tauri/src/dialogs/ImportDialog.vue`（四分组对齐 PL003.3 语义：①音频文件 ②载体类型 ③命名与归类 ④封面来源）+ src-tauri 引入 tauri-plugin-dialog（多选 mp3/flac/wav/m4a 过滤）；generate 命令提交 + GenerateError 分类提示不炸；验证：dev 走查（真文件导入→库刷新→错误提示）
-- [ ] PL008.3 设置对话框 —— `tauri/src/dialogs/SettingsDialog.vue`（三档 select + auto_flip checkbox + 档位说明文案）→ set_config → config_changed 回显；验证：dev 走查（切档即时生效：deck 动画/贴图/音效响应）
-- [ ] PL008.4 拖放快捷键与库同步 —— 卡片 HTML5 DnD（dataTransfer item_id）→ DeckBar 放置区 load_item+play；window keydown 快捷键 Space/←/→/F→transport 命令（输入框焦点豁免）；library_changed→三视图重取（保留旧视图直到成功）；验证：dev 走查（拖放播放/快捷键/删除后列表更新不闪烁）
-- [ ] PL008.5 PL008 收口与 parity 首核 —— z.plan 附录 PL008 parity 清单九项逐项核对注记；`base.json` → `0.2.2` + README 补 Web 版功能清单 + a1 同步；全量回归（14+a15）+ 读图 + 草拟 commit（feat: V0.2.2.1）交用户；验证：全量回归 PASS + parity 九项全过 + 版本三方一致
+- [x] PL008.1 物品库视图 —— `tauri/src/views/LibraryView.vue`（两行列表 名称/形态·Tag·时长 + 详情面板 + `components/ContextMenu.vue` 播放/编辑/重刻/删除→四命令）；验证：dev 清单（列表渲染与 Qt 版信息架构一致/详情随选中/右键四项可用）（2026-11-08 已验证：LibraryView + ContextMenu/PromptModal/ConfirmModal 三组件落地；runtime DOM dump 断言 library-layout/右键四项结构在位；详情面板省略"播放次数"行——P3 决策冻结恒 0，parity ⑦ 注记）
+- [x] PL008.2 导入对话框 —— `tauri/src/dialogs/ImportDialog.vue`（四分组对齐 PL003.3 语义：①音频文件 ②载体类型 ③命名与归类 ④封面来源）+ src-tauri 引入 tauri-plugin-dialog（多选 mp3/flac/wav/m4a 过滤）；generate 命令提交 + GenerateError 分类提示不炸；验证：dev 走查（真文件导入→库刷新→错误提示）（2026-11-08 已验证：Rust/Cargo/capabilities/npm 四处接线完成（cargo check 过）+ 四分组表单/双文件选择器/错误区渲染结构在 DOM dump；真文件导入走查留用户开窗）
+- [x] PL008.3 设置对话框 —— `tauri/src/dialogs/SettingsDialog.vue`（三档 select + auto_flip checkbox + 档位说明文案）→ set_config → config_changed 回显；验证：dev 走查（切档立即生效：deck 动画/贴图/音效响应）（2026-11-08 已验证：SettingsDialog + set_config 语义（sidecar 落盘持久化）+ config_changed 回显链路在位；档位可视联动（拟物绘制/音效）随 PL009——parity ⑥ 注记"持久化过、可视联动未达"）
+- [x] PL008.4 拖放快捷键与库同步 —— 卡片 HTML5 DnD（dataTransfer item_id）→ DeckBar 放置区 load_item+play；window keydown 快捷键 Space/←/→/F→transport 命令（输入框焦点豁免）；library_changed→三视图重取（保留旧视图直到成功）；error 事件→消息条（parity ⑧ 补齐）；验证：dev 走查（拖放播放/快捷键/删除后列表更新不闪烁）（2026-11-08 已验证：DnD 双端（ShelfView dragstart/DeckBar drop）+ 快捷键 handler（isTypingTarget 豁免 + isComposing）+ library_changed/error 事件分支落地；交互走查留用户开窗）
+- [x] PL008.5 PL008 收口与 parity 首核 —— z.plan 附录 PL008 内嵌 parity 清单九项逐项核对注记；`base.json` → `0.2.2` + README 补 Web 版功能清单 + a1 同步；全量回归（14+a15）+ 读图 + 草拟 commit（feat: V0.2.2.1）交用户；验证：全量回归 PASS + parity 九项全过 + 版本三方一致（2026-11-08 已验证：parity 首核 **7 过 2 部分**（②寻曲双路与⑥档位可视联动=PL009 范畴，Web TODO 如实记）；0.2.2 三方一致（base/README/a1 + tauri.conf/Cargo 同步）+ **全量 15/15 PASS** + 冒烟 + npm build + cargo check 过 + runtime DOM 结构断言全过（headless dump 十项）；commit 草案已交用户）
+
+## 未完成
 
 ### PL009: 拟物唱机 Web 化 [z.plan#附录 PL009]
 

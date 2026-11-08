@@ -39,6 +39,14 @@ function coverUrl(item: ItemDict): string | null {
   }
   return null
 }
+
+const DND_MIME = "application/x-mrsir-item-id"
+
+function onDragStart(item: ItemDict, event: DragEvent) {
+  // PL008.4：卡片拖往唱机（HTML5 DnD，mime 自定义类型对齐 Qt 版 dnd 契约语义）
+  event.dataTransfer?.setData(DND_MIME, item.id)
+  event.dataTransfer!.effectAllowed = "copy"
+}
 </script>
 
 <template>
@@ -54,6 +62,8 @@ function coverUrl(item: ItemDict): string | null {
           v-for="item in group"
           :key="item.id"
           class="card"
+          draggable="true"
+          @dragstart="onDragStart(item, $event)"
           @click="emit('play', item)"
         >
           <img v-if="coverUrl(item)" :src="coverUrl(item)!" alt="封面" />

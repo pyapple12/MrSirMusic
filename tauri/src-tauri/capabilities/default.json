@@ -1,7 +1,7 @@
 {
   "$schema": "gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口默认能力（核心事件/调用；shell 插件仅 Rust 侧使用，无需前端授权）",
+  "description": "主窗口默认能力（核心事件/调用；对话框插件供导入文件多选；shell 插件仅 Rust 侧使用）",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:default"]
 }
