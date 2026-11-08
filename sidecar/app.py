@@ -64,8 +64,10 @@ class Session(QObject):
 
     def bootstrap_snapshot(self) -> dict[str, Any]:
         # 前端唯一配置源（PL006 get_bootstrap）：静态四分类 + 用户配置 + 库全量
+        # PL009 增 app_root：前端拼贴图/音效绝对路径（convertFileSrc 需绝对路径）
         from config.settings import load_config
         from config.static.static_config import get_static_config
+        from utils.paths import project_root
 
         sc = get_static_config()
         cfg = load_config()
@@ -75,6 +77,7 @@ class Session(QObject):
             "ui": sc.ui,
             "effects": sc.effects,
             "item_types": sc.item_types,
+            "app_root": str(project_root()),
             "user_config": {
                 "realism_level": cfg.realism_level,
                 "auto_flip": cfg.auto_flip,
