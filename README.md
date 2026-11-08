@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.1.6-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.2.0-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)

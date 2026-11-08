@@ -440,3 +440,91 @@ Track: path / title / artist / album / duration(秒) / format
 档位接线：`effects.json` 三档加 `texture` bool——concise=false（纯矢量现状不变）/ refined=true（贴图打底，**跳过手绘沟槽高光弧**防与照片级贴图打架）/ realistic=true（贴图打底 + 手绘动态层全开）。qa 门禁：四图读图核对 + walnut 2×2 平铺验证图查缝（验证图只落 .temp 不入库）。
 
 **明确不做**（补充）：AI 生图替代烘焙；非整数周期波纹（会出平铺缝）。
+
+## 附录 PL006：IPC 契约与 Python Sidecar（2026-11-07 立项）
+
+> 状态：📌 待实施（任务组见 x.progress.md「PL006」；Tauri 迁移线五案 PL006-PL010 之首，后续全案依赖本组）。
+
+**定案口径**
+
+- 背景定案：拟物观感瓶颈在 QPainter 框架层（无着色器/实时光照/模糊，装饰层有崩溃面）——前端选型经 Godot 对照后定 **Tauri + Web + Python sidecar**（modules/ 100% 复用是决定性理由；Godot 无法执行 Python，推翻"只换 ui/ 层"前提）
+- 通道定案：**stdio JSON Lines 双向**（Tauri plugin-shell sidecar）——免 Windows 防火墙首启弹窗、免端口冲突
+- 信封定案：请求 `{id, cmd, params}` → 响应 `{id, ok, result | error{category,message}}`；事件 `{event, data}` 单向推送；错误分类复用既有语义（generate / file_missing / io / not_found / bad_request / internal）
+- 命令面定案：`ping` / `get_bootstrap`（静态配置+用户配置+items 六合快照 = 前端唯一配置源）/ `list_items` / `load_item` / `transport_play|pause|stop|next|prev|flip` / `seek{seconds}` / `seek_side{fraction}` / `generate` / `regenerate` / `rename_item` / `change_tag` / `delete_item` / `set_config`
+- 事件面定案：`ready`（握手，携版本与库统计）/ `progress` / `playback_state` / `track_changed` / `side_flipped` / `error` / `library_changed` / `config_changed`
+- 架构定案：新顶层 `sidecar/` 包（app/protocol/commands/__main__ 四件）；QCoreApplication 无头循环；**modules/ 一行不改**；播放引擎留在 sidecar（QMediaPlayer 特许随进程；Web Audio 直驱归 problems#6 评估）
+- 测试钩子定案：`--db <path>` / `--config <path>` 启动参数（a15 探针隔离，不污染真实库与用户配置）
+- 版本定案：收口推进 `0.2.0`（0.2 主线首版）
+
+**明确不做**：任何 Tauri/web 代码（PL007 起）；播放引擎移植 web；打包（problems#4）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL006」组；协议细节以 `sidecar/protocol.py` 实现为准。
+
+## 附录 PL007：Tauri 壳与置物架试点（2026-11-07 立项）
+
+> 状态：📌 待实施（依赖 PL006；环境门禁 PL007.1 不过全组挂起，仿 PL005.1 先例）。
+
+**定案口径**
+
+- 环境门禁定案：Rust toolchain（cargo）+ Node 22+ 探活闸
+- 工程定案：`tauri/` npm 工程（**Vite + Vue 3 + TypeScript**）+ `src-tauri/` Rust 壳；gitignore `tauri/target|node_modules|dist`
+- 桥定案：Rust 侧 plugin-shell **dev spawn**（`.venv` python 直跑 sidecar，不经 externalBin——打包壳切换属发布线 problems#4）；stdout 泵线程→Tauri 事件；invoke id 关联应答（超时 60s）
+- 韧性定案：sidecar 崩溃→指数退避重启×3→`sidecar://dead`→前端错误横幅（容错登记三条：IPC 超时/崩溃重启/ready 超时）
+- 前端定案：主题桥 = ui.json → CSS custom properties（**配置单源不变**）；试点视图 = 置物架（分组卡片流 + 封面 convertFileSrc + 点击播放）+ 最小传输条（播放/暂停 + 只读进度）
+- 版本定案：收口推进 `0.2.1`
+
+**明确不做**：右键/对话框/拖放（PL008）；拟物绘制与音效（PL009）；打包/externalBin（problems#4）；任何 CDN/联网依赖（**离线优先**延续）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL007」组。
+
+## 附录 PL008：管理面完备（2026-11-07 立项）
+
+> 状态：📌 待实施（依赖 PL007）。
+
+**定案口径**
+
+- 视图定案：物品库视图（两行列表+详情+右键菜单四项）对齐 Qt 版信息架构
+- 对话框定案：导入四分组（对齐 PL003.3 分组语义）+ 文件选择走 tauri-plugin-dialog 原生多选；设置对话框（档位+自动翻面，set_config 实时生效）
+- 交互定案：卡片→唱机 HTML5 DnD；快捷键 Space/←/→/F（window keydown，输入框焦点豁免）；library_changed 事件驱动三视图同步（**保留旧视图直到成功**——沿用既有刷新原则）
+- parity 清单定案：本附录内嵌 Qt 版功能对照表（迁移期核心验证资产，PL008 首核 / PL010 终验），见下
+- 版本定案：收口推进 `0.2.2`
+
+**parity 清单（九项）**：① 播放路由（卡片点击/库右键/拖放入唱机）② 寻曲双路（滑条 scrub 曲内秒 + 唱针拖针面内比例跨曲）③ 翻面（按钮 + 自动翻面设置生效）④ 导入（多选/类型/命名/Tag/封面来源四分组/GenerateError 提示）⑤ 编辑改名换 Tag + 重刻容量拒绝 + 删除级联 ⑥ 设置三档即时生效 + 自动翻面 + 重启保持 ⑦ 详情面板字段 ⑧ 缺失文件 file_missing 提示不崩溃 ⑨ 库同步（增删改后三视图一致）
+
+**明确不做**：拟物唱机重绘（PL009）；打包；任何 Qt 版功能回改（parity 发现差异一律记 Web 版 TODO，不为迁移动 Qt 壳）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL008」组。
+
+## 附录 PL009：拟物唱机 Web 化（2026-11-07 立项）
+
+> 状态：📌 待实施（依赖 PL008；五案中工作量最大——deck_widget/record_widget/parts/sounds 的 TS 等价物）。
+
+**定案口径**
+
+- 绘制定案：SVG（唱针几何/夹持爪/飞轮）+ Canvas（磁带卷轴）+ CSS transform（旋转）组合；几何/物理常量**逐条自 Qt 版移植并在 TS 注明同源**（`_PIVOT_*`/`reel_factor`/`REEL_BASE_SPEED`/惯性 2.2/wind 900）
+- 贴图定案：data/textures 四贴图经 asset protocol 直读；refined=贴图底、realistic=贴图+手绘层叠加、concise=纯矢量——effects.json 语义平移；缺失回退矢量（容错登记语义平移）
+- 交互定案：拖针 pointer 三事件（27px 命中/±180° 解卷/钳制/有效窗）+ scrub 三态挂起语义 + wind 方向——全部对照 Qt 版行为移植；拖针手感为主观项，**预留真机调参轮**
+- 音效定案：Web Audio API（decodeAudioData；crackle 循环随播放态启停 vinyl 门控；落针/机械声一次性；档位 gain=ambience_intensity）
+- 磨损定案：wear/weathering overlay（mix-blend-mode，档位强度映射）
+- 版本定案：收口推进 `0.2.3`
+
+**明确不做**：播放引擎移入 web（problems#6 评估）；实时着色器/WebGL（CSS/SVG 不够再评估，属 0.3 优化线）；打包。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL009」组。
+
+## 附录 PL010：迁移收官（2026-11-07 立项）
+
+> 状态：📌 待实施（依赖 PL009；本组完成 = 0.2 迁移线完成——dev 可用、parity 达标；**不含打包发布**）。
+
+**定案口径**
+
+- 交付边界定案：0.2 收官 = **dev 模式功能 parity + 探针全绿**；PyInstaller/NSIS/自动更新/签名全部属后续发布线（problems#4）——0.2 不含任何交付物
+- dev 启动定案：`npm run tauri dev` 一键起壳+sidecar（venv python 直跑）为标准启动路径
+- 双入口定案：Qt 壳保留作迁移安全网，0.3 首轮审计裁决去留（problems#5）；双前端期 AGENTS 分层条款在案
+- 文档定案：AGENTS 架构节改写（新分层图）/ README 双前端如实 / w.study 增 Tauri 研读节
+- 后续线登记定案：problems#4 打包发布线 / problems#5 Qt 壳去留 / problems#6 Web Audio 直驱（本立项时预登记，PL010.4 核对）
+- 版本定案：收口推进 `0.2.4`
+
+**明确不做**：打包/安装器/自动更新/代码签名（problems#4）；删除 Qt 壳（problems#5）；性能优化与深度测试（0.3 线既定输入）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PL010」组。

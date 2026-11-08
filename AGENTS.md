@@ -6,7 +6,7 @@
 
 - 入口 `main.py`：`python main.py`（GUI 默认）；`python main.py --version` 打印版本；版本常量 `VERSION` 单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用
 - 没有测试/lint 命令。改动后验证：`.\.venv\Scripts\python.exe -c "import main, modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, ui.main_window, ui.bridge.event_bridge, ui.themes, utils.logger, utils.file_utils, utils.retry, utils.convert"`。不要直接跑 GUI 验证（会弹窗阻塞）
-- 全量探针回归（.temp/probe_*.py，offscreen）：`$env:QT_QPA_PLATFORM="offscreen"; foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a9_playback','probe_a10_bridge','probe_a11_ui','probe_a12_widgets','probe_a13_effects','probe_a14_integration')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归
+- 全量探针回归（.temp/probe_*.py，offscreen）：`$env:QT_QPA_PLATFORM="offscreen"; foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a9_playback','probe_a10_bridge','probe_a11_ui','probe_a12_widgets','probe_a13_effects','probe_a14_integration','probe_a15_sidecar')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归（a15 为子进程协议探针，非 offscreen 依赖，随批回归）
 - GUI 无头初始化验证（不弹窗）：`$env:QT_QPA_PLATFORM="offscreen"; .\.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; from ui.main_window import MainWindow; app = QApplication([]); w = MainWindow(); print('GUI init OK')"`
 - 依赖（`requirements.txt`）：PySide6、mutagen 等，按需添加（见 z.plan.md）
 
@@ -18,6 +18,7 @@
 - **offscreen 无中文字体**：截图探针中文字全部呈 □ 占位——文字排版类评审/核对（字体层级、行高）必须真机截图，offscreen 截图只用于布局/色彩/控件判断（2026-11-05 UI 评审实测）
 - **假音频文件无法真解码**：手写 RIFF 头的空文件会被 FFmpeg 后端拒（`errorOccurred → ERROR → stopped`）——播放链探针必须用 `wave` 模块生成真实 PCM 音频，否则播放态/唱针联动等断言连锁失真（2026-11-05 实测）
 - **QMediaPlayer 持媒体文件句柄**（Windows 文件锁）：播放/加载后立即 rename/删除音频文件会 `PermissionError`——探针先 `setSource(QUrl())` 清空源释放句柄 + rename 加重试（probe_a14 实测）
+- **stdio 协议流纪律**（sidecar，2026-11-08 实测）：JSON Lines 管道有缓冲——写信封必须**逐行 flush**，否则父进程读不到（a15 红灯证据）；stdout 是协议专用流，任何日志/第三方诊断不得写入（logging StreamHandler 默认 stderr、FFmpeg 诊断也在 stderr——天然不污染，spawn 侧 `stderr=DEVNULL` 即可）
 
 ## 验证与门禁（硬性工作流）
 
@@ -31,7 +32,8 @@
 
 ## 结构与约定
 
-- 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `ui/`（界面，**唯一允许 import PySide6 的层**）
+- 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `ui/`（界面）与 `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 ui/ 与 sidecar/app.py 两处**（sidecar 仅 QtCore 无 GUI：QCoreApplication/QObject/Signal 进程骨架特许）
+- `sidecar/` 侧车进程（PL006 定案）：stdio JSON Lines 协议对外暴露 modules/ 业务（信封定案见 z.plan 附录 PL006）；**modules/ 零改动纯委托**；协议编解码/常量单源 `sidecar/protocol.py`；命令表与错误分类单源 `sidecar/commands.py`；优雅退出 = stdin EOF（engine.stop 先行）；测试钩子 `--db/--config`（对称 set_db_path_for_tests 惯例，探针隔离不污染真实数据）；stdout 协议流零污染（日志走 stderr + 文件）
 - `modules/` 是**唯一可被未来复用的层**（Web / Godot 后续计划只换 ui/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
 - `modules/` 零 UI 依赖：禁止 import PySide6/Qt 任何类型；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`ui/bridge/` 是唯一翻译层（core 事件 → Qt 信号）
 - `config/` 配置分两类：
@@ -133,6 +135,7 @@
 - **面内寻曲时长缺失降级单曲比例**（H1 引入 / FIX006.7 登记）：场景——同上；降级行为——seek_side 按当前曲目内比例跳转；理由——寻曲可用性优先，比例语义在单曲内仍成立
 - **未知载体形态回退黑胶绘制**（PL002 引入 / FIX006.7 登记）：场景——item_types 配置 shape 非法或类型键未知；降级行为——按黑胶/circle 绘制 + 告警一次；理由——拟物绘制为装饰层，不得阻断载入与播放
 - **贴图加载失败回退矢量绘制**（PL005 引入 / 2026-11-07 登记）：场景——data/textures 贴图缺失或损坏（精简分发漏带资产/路径错误）；降级行为——每键告警一次并按现有矢量渐变绘制，播放与拟物交互不受影响；理由——贴图为装饰层，与噪点叠加同性质的画质增强，不得阻断拟物绘制与播放
+- **侧车单命令异常收敛信封**（PL006 引入 / 2026-11-08 登记）：场景——任一命令处理抛未分类异常（命令层 bug/依赖环境突变）；降级行为——记日志（含栈）+ 返回 internal 错误信封，进程与事件循环不退出；理由——单命令失败不得杀死整个后端进程（前端还有重启策略兜底，PL007.3），错误信封保证前端可提示可重试
 
 ### 函数注释规则
 
@@ -169,7 +172,7 @@
 
 ## Git 注意
 
-- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.agents/skills/`、`.mimosa/`、`.zcode/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 纳入版本控制
+- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.agents/skills/`、`.mimosa/`、`.zcode/`、`.archived/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 纳入版本控制
 - 严禁将 API key、authCookie、workspaceId 等凭据提交到仓库
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 

@@ -245,3 +245,6 @@ music/*
 
 # 项目级技能目录（机器本地资源，与 .reference/ 同性质；来源与维护约定见 .agents/skills/README.md）
 .agents/skills/
+
+# Qt 前端迁移前快照（本机存档副本，git 历史另有同状态快照可检出）
+.archived/

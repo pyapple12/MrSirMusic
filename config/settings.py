@@ -93,6 +93,15 @@ def save_config(cfg: AppConfig) -> None:
             _logger.warning("配置变更回调异常（已隔离）: %s", exc)
 
 
+def set_config_path_for_tests(path: str | None) -> None:
+    # 测试钩子（sidecar a15 探针隔离，对称 repository.set_db_path_for_tests）：覆盖配置路径 + 失效缓存；None 恢复默认
+    global USER_CONFIG_PATH, _config_cache
+    USER_CONFIG_PATH = (
+        project_root() / "config" / "user_config.json" if path is None else Path(path)
+    )
+    _config_cache = None
+
+
 def add_change_listener(callback: Callable[[AppConfig], None]) -> None:
     # 注册变更回调（保存配置后触发；C1.3 同一回调去重）
     if callback not in _changed_listeners:
@@ -114,4 +123,5 @@ def add_change_listener(callback: Callable[[AppConfig], None]) -> None:
 #   逻辑：目录确保 → 档位白名单校验（非法回退默认）→ json 覆盖写（UTF-8）→ 失效缓存 → 触发回调
 #   异常：写失败日志告警（不抛出）；回调异常单独捕获不影响其他回调
 # add_change_listener(callback) -> None: 注册变更回调（保存成功后触发；同一回调去重）
+# set_config_path_for_tests(path|None): 测试钩子（覆盖配置路径 + 失效缓存；sidecar a15 探针隔离用）
 #   关联配置：config/user_config.json（运行时生成，已 gitignore）；effects.json（档位白名单）

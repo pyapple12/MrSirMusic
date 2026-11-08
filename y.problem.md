@@ -47,3 +47,15 @@
 - 方案 A（补接线）：若"播放计数"属产品承诺功能——`engine` 播放自然结束（ended）或手动切曲完成时 `item.play_count += 1` + `update_item`；需 engine 持有 Item 引用或经事件携带 item_id 回写
 - 方案 B（彻底移除）：删 items.play_count 列（需迁移 v2）+ Item.play_count 字段 + 详情面板"播放次数"行
 - 当前状态：写链已删、读链保留、功能冻结恒 0；详情面板的"播放次数"行随之失去意义，待方案拍板时一并处理
+
+4. **Tauri 打包发布线（0.2 迁移完成后启动）**（2026-11-07 📌 待评估）[problems#4]：
+
+范围：PyInstaller 打 sidecar exe（PySide6+mutagen 捆绑；已知坑：隐藏 DLL 导入、体积预期 60–100MB）→ Tauri externalBin 接线替换 dev spawn + NSIS 安装包 + 自动更新与代码签名评估。触发条件：PL010 迁移收官、parity 稳定后单独立项（发布线 PL）。来源：PL006-PL010 立项讨论（用户定案 0.2 不含打包）。
+
+5. **Qt 壳（main.py GUI + ui/）去留裁决**（2026-11-07 📌 待评估）[problems#5]：
+
+现状：双入口期（Qt 壳 + Tauri 壳并存），Qt 壳为迁移安全网保留。裁决时点：0.3 首轮全量审计。裁决依据：parity 清单九项全过 + 真机使用反馈 + Tauri 版稳定性记录。选项：A 整体删除 ui/ + main.py GUI 分支 + a11-a13 探针退役（AGENTS/README 同步改写）；B 长期保留双入口。连带：容错登记制条目与 AGENTS 分层节同步。
+
+6. **Web Audio 直驱播放评估（0.3 优化线）**（2026-11-07 📌 待评估）[problems#6]：
+
+0.2 定案播放留在 sidecar（QMediaPlayer 特许随进程）。0.3 评估移入 webview：HTML5 Audio（解码白嫖浏览器）+ Web Audio API（scratch/可视化潜力）——收益 = sidecar 摘除 PySide6（体积与打包复杂度大降）；风险 = 引擎七轮审计语义（pending_seek/缺失处理/seek_side）重写回归，需 parity 清单全套护航。

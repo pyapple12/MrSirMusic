@@ -206,8 +206,6 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] FIX007.6 [P3] 不可达分支清理 —— `static_config.py:179-180` 删非 dict continue 双保险分支（上游 values_must_be_dict 已保证）；验证：a1 shape 校验断言原样过 + 冒烟（2026-11-05 已验证：_sanitize_item_types 非 dict continue 删除——a1 shape 校验断言原样过）
 - [x] FIX007.7 验证收尾 —— 全量 14 探针（offscreen）+ 冒烟 + `--version` 0.1.4 一致 + a9 重点核对（FIX007.1/2 断言）+ 反向验收（原问题"旧媒体不停声"→验收"缺失载入后停声"）；结论如实回写勾选注记（2026-11-05 已验证：全量 14 探针 PASS + 冒烟 + --version 0.1.4 + 反向验收（playbackState StoppedState 断言即原问题对照））
 
-## 未完成
-
 ### PL004: game-ui-ux 对照审查与补强 [z.plan#附录 PL004] ✅
 
 > 结果：焦点体系三处歧义全消（初始焦点落库列表 / 滑条与卡片退出焦点链 / QSS 聚焦描边可见）+ 置物架组内改流式布局（最小窗多卡折行，横向滚动条消除）；全量 14 探针 PASS + 十图终审读图通过。
@@ -227,3 +225,60 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL005.4 deck_widget 贴图合成 —— `ui/widgets/deck_widget.py` 新增 `_texture_pixmap(key)` 惰性缓存加载器（QPixmap；缺失/损坏回退矢量绘制 + 告警一次——AGENTS 容错登记制补登记该降级点）；`_paint_vinyl`/`_paint_cassette_deck`/`_paint_cd` 改分层：贴图底图（按档位开关）→ 现有动态层（唱针/卷轴/高光/夹持爪）叠加；新增槽 `set_realism(level)`；验证：a12 追加断言（set_realism 三档切换绘制路径标记 + 移走贴图文件后 grab 不崩走回退）+ 冒烟（2026-11-07 已验证：加载器收口 `ui/widgets/parts.py` 单源（texture_pixmap 惰性缓存 + 每键告警一次 / texture_enabled 档位开关），deck 三形态贴图分层落地；a12 断言三档传导/512 在位/缓存 None 回退三形态 grab 不崩全过；AGENTS 容错登记制补"贴图加载失败回退矢量绘制"条目）
 - [x] PL005.5 record_widget/shelf 接线与档位分发 —— `ui/widgets/record_widget.py` 同构接 `_texture_pixmap`（盘面/壳体贴图底，56px 缩略平滑缩放）；`ui/views/shelf_view.py` 卡片缩略图合成贴图底；`config/static/effects.json` 三档加 `texture` bool 键；`ui/main_window.py` `_apply_realism` 增 `set_realism` 分发到 deck_widget/record_widget；验证：a13 追加断言（档位切换 texture 键读取与传导 + 无 texture 键宽容回退）+ a1 配置回归 + 冒烟（2026-11-07 已验证：record 同构 + main_window 三处分发（deck/record/shelf）+ a13/a1 texture 键断言过 + a11 分发传导断言过；卡片贴图底走 QSS background-image 原生路径——卡片自绘 paintEvent 在 QSS 按钮层级存在 C++ 崩溃面（faulthandler 抓 access violation、子类覆写同体复刻即消，机制未明留档 .temp/pl005_bisect*.py）；过程修正 record_widget 漏 import Qt（realistic 档 NameError → QPainter 开放 → access violation 同源，一行修复））
 - [x] PL005.6 PL005 收口 —— `config/static/base.json` version → `0.1.6` + README 徽章同步 + 拟物段补贴图管线说明 + a1 版本断言同步；全量 14 探针 + 冒烟 + `--version` 一致 + ui_review_shots 复拍（三形态 × 档位组合）+ 多模态读图终审 + AGENTS 容错登记制补录核查 + 草拟 commit（feat: V0.1.6.1）交用户；验证：全量回归 PASS + 版本三方一致 + 读图记录 + 登记制核查（2026-11-07 已验证：全量 14/14 PASS + 冒烟 + --version 0.1.6 三方一致；十三图终审读图过——refined 档贴图生效清晰（烘焙沟槽 vs 矢量渐变对照）、QSS 木纹卡片成立；realistic 档暴露 A13 风化叠加方形硬边为既有观感（非本次回归，此前截图未在 realistic 档拍过），留档观察不占编号；登记制补录核查过；commit 草案已交用户）
+
+### PL006: IPC 契约与 Python Sidecar [z.plan#附录 PL006] ✅
+
+> 结果：`sidecar/` 四件落地（protocol 信封单源 / app 进程线程模型 / commands 18 命令表 / __main__ 测试钩子）+ a15 协议探针全链 PASS；全量 15/15 + --version 0.2.0。modules/ 零改动纯委托。TDD 红灯→绿灯证据：红灯 = sidecar 不存在 ready 超时（ModuleNotFoundError → stdout EOF）；过程红两处 = 探针事件游标捞到 load_item 历史 stopped 态（改游标顺序消费 + playing 态过滤）与空文件列表被误判 bad_request（改放行业务 GenerateError → generate 分类，与 Qt UI 同语义）；终绿后全程稳定。
+
+- [x] PL006.1 协议与骨架 —— 新建 `sidecar/` 包四件：`sidecar/protocol.py`（信封编解码——请求 `{id,cmd,params}` / 响应 `{id,ok,result|error{category,message}}` / 事件 `{event,data}`；JSON Lines 线帧 encode/decode；命令名与事件名常量单源）；`sidecar/app.py` `Session` 类（QCoreApplication 无头事件循环；bootstrap=静态配置快照+`repository.load_all`；stdin 读取线程按行分发到命令表；stdout 单写锁+逐行 flush；event_bus 订阅→事件泵）；`sidecar/commands.py`（命令注册表 dict + `dispatch(cmd,params)`）；`sidecar/__main__.py`（`main()` 入口 + `--db <path>`/`--config <path>` 测试钩子参数 → `set_db_path_for_tests`/配置路径覆盖）；验证：冒烟 import 含 sidecar 四模块 + ping 单命令子进程回环手测（2026-11-08 已验证：四模块冒烟过；线程模型落地 = stdin 守护线程→Qt 信号排队、命令/响应/事件写全部主线程；config/settings.py 补 set_config_path_for_tests 测试钩子——config 层对称 repository 惯例）
+- [x] PL006.2 传输命令面 —— `sidecar/commands.py`：`ping`/`load_item{item_id}`/`transport_play|pause|stop|next|prev|flip`/`seek{seconds}`/`seek_side{fraction}` 九命令委托 `modules.playback.engine.PlaybackEngine`（引擎事件经 PL006.4 泵推送）；错误映射（未知命令/参数缺失→bad_request、未捕获异常→internal）；验证：a15 传输断言段（spawn 子进程→真 wave PCM wav load_item→play→playback_state=playing 事件→seek→stop 全链）（2026-11-08 已验证：a15 传输段全过——playing 态事件到达、seek_side 返回 applied bool）
+- [x] PL006.3 库与生成命令面 —— `sidecar/commands.py` 续：`list_items`（load_all 全量+封面路径）/`delete_item`/`rename_item`/`change_tag`/`regenerate`/`generate{files,type_key,name,tag,cover_source}`（`GenerateError`→error{category:"generate"}中文消息透传）；全部写命令成功后发 `library_changed`；验证：a15 库断言段（临时库 generate→list 计数→rename→delete 级联→generate 空文件拒绝且 category=="generate"）（2026-11-08 已验证：a15 库段全过——generate 返回 id、library_changed 到达、list_items 单件结构含 sides/tracks/is_missing=False；空文件列表经 GenerateError → generate 分类）
+- [x] PL006.4 配置与事件泵 —— `sidecar/commands.py` `get_bootstrap`（base/ui/effects/item_types/user_config/items 六合快照=前端唯一配置源）/`set_config{realism_level?,auto_flip?}`（`config.settings.save_config` 变更监听链路复用）；`sidecar/app.py` 事件泵订阅 event_bus 五事件→protocol 事件（progress/playback_state/track_changed/side_flipped/error）+ `ready` 握手（bootstrap 完成首发，携版本与库统计）+ `config_changed`；验证：a15 事件流断言（ready 首发顺序/set_config 后 config_changed 收到/progress 事件在播放中出现）（2026-11-08 已验证：a15 事件段全过——ready 首发携 version/items_count=0、config_changed 携 realistic、--config 路径落盘核验）
+- [x] PL006.5 探针与登记 —— 新建 `.temp/probe_a15_sidecar.py`（`sys.executable -m sidecar --db <临时库> --config <临时配置>` spawn；握手/传输/库/错误分类/优雅退出五段断言；真音频 wave 模块 PCM；stdin EOF→进程 exit 0）；AGENTS 登记：结构与约定节增 sidecar 层条款（独立进程零 GUI、Qt 仅 engine/app 事件循环特许、stdio JSON Lines 协议）、运行与验证节增 a15 命令、环境陷阱增"子进程管道缓冲需逐行 flush"条；验证：a15 全绿 + 既有 14 探针回归全绿（modules 未动证据）（2026-11-08 已验证：a15 五段全过含 stdin EOF→exit 0；AGENTS 五处落地——分层条款改"ui/ 与 sidecar/app.py 两处 Qt 特许"、sidecar 层定义条、a15 入回归命令、环境陷阱"stdio 协议流纪律"、容错登记"侧车单命令异常收敛信封"）
+- [x] PL006.6 PL006 收口 —— `config/static/base.json` version → `0.2.0`（0.2 主线首版）+ README 徽章 + a1 版本断言同步；全量回归（14+a15）+ 冒烟 + `--version` 一致；草拟 commit（feat: V0.2.0.1）交用户；验证：全量回归 PASS + 版本三方一致（2026-11-08 已验证：全量 15/15 PASS + 冒烟 + --version 0.2.0 三方一致；commit 草案已交用户）
+
+## 未完成
+
+### PL007: Tauri 壳与置物架试点 [z.plan#附录 PL007]
+
+> 目标：Tauri 窗口 + Rust IPC 桥 + 置物架视图端到端闭环（点卡片出声）。依赖：PL006；环境门禁 PL007.1 不过全组挂起（不阻塞已收官件）。
+
+- [ ] PL007.1 环境门禁（挂起闸） —— 探活三件：`cargo --version`（rustup+MSVC）、`node --version`≥22、`npm --version`；写 `.temp/probe_tauri_env.py` 汇总结论；不过 → 安装指引报告并挂起 PL007.2-6；验证：探活 PASS（三命令输出在案）
+- [ ] PL007.2 Tauri 工程脚手架 —— 新建 `tauri/`（npm 工程：package.json=vite+vue3+typescript、vite.config.ts、src/ 前端源码；src-tauri/=Cargo.toml、tauri.conf.json（devUrl localhost:1420 + beforeDevCommand）、src-tauri/src/main.rs+lib.rs）；`.gitignore` 增 `tauri/target/`、`tauri/node_modules/`、`tauri/dist/`；验证：`npm install` + `npm run tauri dev` 空窗口起（人工）+ `cargo check` 过
+- [ ] PL007.3 Rust IPC 桥 —— 新建 `tauri/src-tauri/src/sidecar.rs`：plugin-shell dev spawn `.venv/Scripts/python.exe -m sidecar`（工作目录=项目根，不经 externalBin——打包壳切换属发布线 problems#4）；stdout 泵线程（JSON Lines 解析→emit `sidecar://event`）；invoke 命令 `sidecar_cmd{cmd,params}`（自增 id + `Mutex<HashMap<u64,mpsc::Sender>>` 关联应答；超时 60s→error + 告警）；sidecar 退出监听→指数退避重启×3→emit `sidecar://dead`；验证：dev 模式 invoke ping→pong 回环 + kill sidecar 进程→自动重启成功→第 4 次失败 dead 事件
+- [ ] PL007.4 前端骨架与主题桥 —— `tauri/src/`：`lib/ipc.ts`（invoke 封装 + `onSidecarEvent` 订阅）；`lib/theme.ts`（get_bootstrap→ui.json colors→`:root` CSS custom properties 注入）；`App.vue` + `styles/base.css`（CSS 变量消费，深棕主题对齐）；验证：dev 窗口背景/主色与 ui.json 一致（读图）+ items 计数与库一致
+- [ ] PL007.5 置物架视图与最小传输条 —— `tauri/src/views/ShelfView.vue`（tag 分组卡片流 flex-wrap；封面 `convertFileSrc(cover_path)`；点击→load_item+transport_play）+ `tauri/src/components/DeckBar.vue`（播放/暂停按钮按 playback_state 切换、只读进度条接 progress、曲目两行文本接 track_changed）；验证：dev 真机清单（点卡片出声/进度走动/切曲文本/暂停态）+ 读图
+- [ ] PL007.6 PL007 收口 —— `base.json` → `0.2.1` + README 新增"Web 版（开发中）"运行段（前置+启动命令）+ a1 断言同步；全量回归（14+a15）+ `cargo check` + 前端 `npm run build` 过；dev 窗口截图读图；AGENTS 容错登记三条（IPC 超时 60s 降级/sidecar 崩溃重启×3/ready 超时）核查补录；草拟 commit（feat: V0.2.1.1）交用户；验证：全量回归 PASS + 版本三方一致 + 读图记录
+
+### PL008: 管理面完备 [z.plan#附录 PL008]
+
+> 目标：库视图+三对话框+拖放快捷键+库同步——Web 版管理能力对齐 Qt 版（parity 清单首核）。依赖：PL007。
+
+- [ ] PL008.1 物品库视图 —— `tauri/src/views/LibraryView.vue`（两行列表 名称/形态·Tag·时长 + 详情面板 + `components/ContextMenu.vue` 播放/编辑/重刻/删除→四命令）；验证：dev 清单（列表渲染与 Qt 版信息架构一致/详情随选中/右键四项可用）
+- [ ] PL008.2 导入对话框 —— `tauri/src/dialogs/ImportDialog.vue`（四分组对齐 PL003.3 语义：①音频文件 ②载体类型 ③命名与归类 ④封面来源）+ src-tauri 引入 tauri-plugin-dialog（多选 mp3/flac/wav/m4a 过滤）；generate 命令提交 + GenerateError 分类提示不炸；验证：dev 走查（真文件导入→库刷新→错误提示）
+- [ ] PL008.3 设置对话框 —— `tauri/src/dialogs/SettingsDialog.vue`（三档 select + auto_flip checkbox + 档位说明文案）→ set_config → config_changed 回显；验证：dev 走查（切档即时生效：deck 动画/贴图/音效响应）
+- [ ] PL008.4 拖放快捷键与库同步 —— 卡片 HTML5 DnD（dataTransfer item_id）→ DeckBar 放置区 load_item+play；window keydown 快捷键 Space/←/→/F→transport 命令（输入框焦点豁免）；library_changed→三视图重取（保留旧视图直到成功）；验证：dev 走查（拖放播放/快捷键/删除后列表更新不闪烁）
+- [ ] PL008.5 PL008 收口与 parity 首核 —— z.plan 附录 PL008 parity 清单九项逐项核对注记；`base.json` → `0.2.2` + README 补 Web 版功能清单 + a1 同步；全量回归（14+a15）+ 读图 + 草拟 commit（feat: V0.2.2.1）交用户；验证：全量回归 PASS + parity 九项全过 + 版本三方一致
+
+### PL009: 拟物唱机 Web 化 [z.plan#附录 PL009]
+
+> 目标：三形态拟物绘制+拖针+scrub+音效——迁移主战场（deck_widget/record_widget/parts/sounds 的 TS 等价物）。依赖：PL008。
+
+- [ ] PL009.1 绘制基座 —— `tauri/src/components/deck/DeckStage.vue`（形态分派容器接 track_changed/state）+ `lib/deckClock.ts`（rAF 帧循环 composable：spinSpeed 惯性缓动 `speed+=(target-speed)*min(1,dt*2.2)` 移植 + 收敛自停 + reel 角度恒线速推进——常量与公式逐条自 `ui/widgets/parts.py`/`deck_widget.py` 移植并 TS 注明同源：REEL_BASE_SPEED/reel_factor/wind 900）；验证：dev 断言（播放启动缓动/停止收敛 rAF 自停）
+- [ ] PL009.2 黑胶形态 —— `deck/VinylDeck.vue`：vinyl_disc.png 贴图底旋转（convertFileSrc）+ 唱针 SVG（`_PIVOT_X/_PIVOT_Y/_ARM_LENGTH/_ANGLE_START/_ANGLE_RANGE/_ANGLE_REST` 常量逐条移植）+ 面内进度→落针角映射 + realistic 档槽纹圈叠加（SVG circle 半透明）；验证：读图（贴图旋转/唱针几何与 Qt 版对照）
+- [ ] PL009.3 拖针寻曲 —— VinylDeck pointer 三事件：27px 命中→atan2 ±180° 解卷→[_DRAG_MIN,_DRAG_MAX] 钳制→Shift×0.1 精调→[_DROP_MIN,_DROP_MAX] 有效窗判定→seek_side(fraction) / 窗外回臂；拖拽即发 transport_pause（提针停转语义）；验证：dev 交互清单（跨曲落针/无效窗回臂/Shift 精调——对照 Qt 版手感，主观项留真机调参注记）
+- [ ] PL009.4 磁带仓与 CD —— `deck/CassetteDeck.vue`（cassette_shell.png 壳体贴图 + 观察窗 canvas `draw_reel` 移植：带卷/缠绕纹/花键 3 齿随角 + 双飞轮 SVG 旋转 + 走带线）+ `deck/CdDeck.vue`（cd_disc.png 贴图旋转——孔已烘焙镂空 + 封面环带 + 3 夹持爪 SVG）；验证：读图（两形态与 Qt 版对照）
+- [ ] PL009.5 scrub 三态与 wind —— `tauri/src/components/ProgressSlider.vue`（range 0-1000；scrub 中挂起 progress 回写+时间文本预览；松手换算秒数 seek）；wind：scrub 方向→CassetteDeck 卷轴加速（±900°/s 基准移植）；验证：dev 清单（拖动预览/松手跳转/磁带 wind 方向正确）
+- [ ] PL009.6 Web Audio 音效 —— `tauri/src/lib/sounds.ts`：fetch data/sounds/*.wav→AudioContext `decodeAudioData`；crackle 循环（loop bufferSource，vinyl 门控随播放态启停）；needle_drop/tape_mech 一次性；档位 gain=ambience_intensity 映射；贴图/音效缺失降级（img onerror→矢量路径 + console.warn 一次——容错登记语义平移）；验证：代码走查档位映射 + dev 听感留真机
+- [ ] PL009.7 磨损效果器 —— `tauri/src/components/EffectOverlay.vue`（wear/weathering.png overlay + mix-blend-mode，档位 opacity 映射 wear_intensity/weathering_intensity）；验证：三档读图对照
+- [ ] PL009.8 PL009 收口 —— `base.json` → `0.2.3` + README 拟物段补 Web 版说明 + a1 同步；全量回归（14+a15）+ 三档×三形态截图读图终审 + 拟物交互清单（拖针/scrub/wind/档位）注记；草拟 commit（feat: V0.2.3.1）交用户；验证：全量回归 PASS + 读图记录 + 版本三方一致
+
+### PL010: 迁移收官 [z.plan#附录 PL010]
+
+> 目标：dev 模式固化+文档/探针/登记收口——0.2 迁移线完成（dev 可用、parity 达标；**不含打包发布**）。依赖：PL009。
+
+- [ ] PL010.1 dev 启动路径固化 —— `tauri/package.json` scripts 收口（`npm run tauri dev` 一键起壳+sidecar）；AGENTS 运行与验证节补全（sidecar 单独跑/Tauri dev/14+a15 探针命令）；验证：按 README 从零步骤走查（人工）
+- [ ] PL010.2 AGENTS 架构节改写 —— 结构与约定节分层重写（tauri 壳+web 前端 ↔ stdio JSON Lines ↔ sidecar/→modules/；sidecar 独立进程零 GUI、Qt 仅 engine/app 循环特许；ui/ 与 tauri/src 双前端并存期条款）；验证：AGENTS 全文走查无新旧口径冲突
+- [ ] PL010.3 README 与 w.study —— README 结构段双前端说明 + 当前形态如实（dev 迁移完成/无安装包/打包属后续线 problems#4）；w.study 第 11 节（Tauri 进程模型/stdio 桥/Rust 侧并发/Vue3 组合式研读）；验证：文档走查
+- [ ] PL010.4 y.problem 登记与容错核查 —— problems#4 打包发布线/#5 Qt 壳去留/#6 Web Audio 直驱 三条登记（本立项时已预登记，本条核对状态与内容仍准确）；AGENTS 容错登记制核查（PL007 三条 + PL009 降级语义平移条目补全齐备）；验证：登记齐全对照
+- [ ] PL010.5 PL010 收口 —— `base.json` → `0.2.4` + a1 同步；全量回归（14+a15）+ parity 终验（z.plan PL008 清单九项复核）+ dev 真机走查（冷启动/重启恢复/中文输入）+ 草拟 commit（feat: V0.2.4.1）交用户；验证：全量回归 PASS + parity 全过 + 版本三方一致
