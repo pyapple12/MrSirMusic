@@ -4,12 +4,11 @@
 
 ## 运行与验证
 
-- 入口 `main.py`：`python main.py`（GUI 默认）；`python main.py --version` 打印版本；版本常量 `VERSION` 单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用
-- 没有测试/lint 命令。改动后验证：`.\.venv\Scripts\python.exe -c "import main, modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, ui.main_window, ui.bridge.event_bridge, ui.themes, utils.logger, utils.file_utils, utils.retry, utils.convert"`。不要直接跑 GUI 验证（会弹窗阻塞）
-- 全量探针回归（.temp/probe_*.py，offscreen）：`$env:QT_QPA_PLATFORM="offscreen"; foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a9_playback','probe_a10_bridge','probe_a11_ui','probe_a12_widgets','probe_a13_effects','probe_a14_integration','probe_a15_sidecar')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归（a15 为子进程协议探针，非 offscreen 依赖，随批回归）
-- GUI 无头初始化验证（不弹窗）：`$env:QT_QPA_PLATFORM="offscreen"; .\.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; from ui.main_window import MainWindow; app = QApplication([]); w = MainWindow(); print('GUI init OK')"`
-- Web 版运行（PL007 双入口，dev 模式）：`cd tauri; npm install; npm run app`——tauri dev 一键起壳 + dev spawn `.venv` python 直跑 sidecar；`npm run build`（tauri 内）验证前端编译；`cargo check`（src-tauri 内）验证 Rust 侧；协议层单独验证 = a15 探针（见上）；打包不做（发布线 problems#4）
-- 依赖（`requirements.txt`）：PySide6、mutagen 等，按需添加（见 z.plan.md）；Web 前端依赖走 `tauri/package.json`（npm，不入 requirements）
+- 入口 `sidecar/__main__.py`（`python -m sidecar`，stdio JSON Lines 协议进程，Web 版后端）；版本单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用；Qt 壳已于 0.2.5 移除（副本存 `.archived/`，裁决记录 problems#5）
+- 改动后验证（冒烟 import）：`.\.venv\Scripts\python.exe -c "import modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, sidecar.protocol, sidecar.commands, sidecar.app, sidecar.__main__, utils.logger, utils.file_utils, utils.retry, utils.convert"`
+- 全量探针回归（.temp/probe_*.py）：`foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a15_sidecar')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归（a15 为子进程协议探针，随批回归；a9-a14 Qt 探针已随 Qt 壳移除退役）
+- Web 版运行（唯一前端，dev 模式）：`cd tauri; npm install; npm run app`——tauri dev 一键起壳 + dev spawn `.venv` python 直跑 sidecar；`npm run build`（tauri 内）验证前端编译；`cargo check`（src-tauri 内）验证 Rust 侧；协议层单独验证 = a15 探针（见上）；打包不做（发布线 problems#4）
+- 依赖（`requirements.txt`）：PySide6（sidecar 播放引擎运行时依赖——QtMultimedia/QtCore，非 UI 用途）、mutagen 等，按需添加（见 z.plan.md）；Web 前端依赖走 `tauri/package.json`（npm，不入 requirements）
 
 ## 环境陷阱
 
@@ -28,18 +27,18 @@
 - **编辑任何 `.py`（main/modules/ui/utils/config）后**：跑冒烟 import 命令（见"运行与验证"），全过才算完成
 - **行为改动后**：跑全量 14 探针回归（offscreen）+ 受影响模块对应探针逐项核对
 - **UI/视觉改动后**：跑 `.temp/ui_review_shots.py` 重拍截图 + 多模态读图核对（读图规则见"操作注意"）
-- **提交前全量门禁**：冒烟 import + 全量探针 + `python main.py --version` 输出与 `base.json` 一致
+- **提交前全量门禁**：冒烟 import（sidecar 入口）+ 全量探针 + 版本与 `base.json` 一致（前端另跑 `npm run build` + `cargo check`）
 - **静态检查工具现状**：Python 侧无 formatter/linter 挂载（ruff 未入 `.venv`）——引入时须先在本节登记并单独一次全量格式化提交（避免格式 diff 混入功能提交）；引入前排版以"代码约定"空格/行长条款为准
 
 ## 结构与约定
 
-- 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `ui/`（界面）与 `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 ui/ 与 sidecar/app.py 两处**（sidecar 仅 QtCore 无 GUI：QCoreApplication/QObject/Signal 进程骨架特许）
+- 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 sidecar/app.py（进程骨架特许：QCoreApplication/QObject/Signal）与 modules/playback（engine 的 QtMultimedia 播放特许 + progress 的 QTimer 特许，均为函数内延迟导入）**；Qt 界面层（原 ui/）已于 0.2.5 移除（副本存 `.archived/`）
 - `sidecar/` 侧车进程（PL006 定案）：stdio JSON Lines 协议对外暴露 modules/ 业务（信封定案见 z.plan 附录 PL006）；**modules/ 零改动纯委托**；协议编解码/常量单源 `sidecar/protocol.py`；命令表与错误分类单源 `sidecar/commands.py`；优雅退出 = stdin EOF（engine.stop 先行）；测试钩子 `--db/--config`（对称 set_db_path_for_tests 惯例，探针隔离不污染真实数据）；stdout 协议流零污染（日志走 stderr + 文件）
 - `tauri/` Tauri 壳（PL007 定案）：Rust 窗口 + WebView2 前端（Vite + Vue 3 + TS，源码 `tauri/src/`）+ Rust IPC 桥（`tauri/src-tauri/src/sidecar.rs`——dev spawn `.venv` python 直跑 sidecar、id 关联应答 60s 超时、崩溃指数退避重启×3→`sidecar://dead`）；**壳零业务**（全部转发 sidecar）；主题桥 = ui.json → CSS custom properties（配置单源不变）；**打包/安装器不做**（发布线 problems#4，`bundle.active=false`）；gitignore `tauri/node_modules|dist|src-tauri/target`
-- **双前端并存期条款**（PL010 定案）：Qt 版（`main.py` + `ui/`）与 Web 版（`tauri/` + `sidecar/`）共用 `modules/` 业务与 `config/` 单源——功能差异一律走 parity 清单核对（z.plan 附录 PL008），不为迁移动 Qt 壳；Qt 壳去留由 0.3 首轮审计裁决（problems#5）；Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）
+- **单前端定案**（0.2.5 用户裁决，problems#5 闭环）：Qt 壳（原 `main.py` + `ui/`）已整体移除（副本存 `.archived/`），**Web 版（`tauri/` + `sidecar/`）为唯一前端**——功能差异对照 z.plan 附录 PL008 parity 清单；Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）
 - **WebView2 前端陷阱**（2026-11-08 实测）：①页面加载后 CSS/JS 走 vite HMR——HMR 断连或缓存陈旧会让"改了没反应"，排查先清 WebView2 数据目录（`%LOCALAPPDATA%\<identifier>\`）重启；②带 `overflow:auto` 的合成滚动容器可能盖住后续普通流层——右侧固定面板类布局用 **Grid 内联子项**（结构性占位，勿依赖 z-index）；③PrintWindow 截 WebView2 需 `PW_RENDERFULLCONTENT(0x2)` 且可能丢独立合成层——取证以多帧交叉为准
-- `modules/` 是**唯一可被未来复用的层**（Web / Godot 后续计划只换 ui/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
-- `modules/` 零 UI 依赖：禁止 import PySide6/Qt 任何类型；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`ui/bridge/` 是唯一翻译层（core 事件 → Qt 信号）
+- `modules/` 是**唯一可被未来复用的层**（前端只换 tauri/src/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
+- `modules/` 零 UI 依赖：禁止 import Qt GUI 类型（playback 的 QtMultimedia/QTimer 延迟导入为唯一播放特许）；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`sidecar/` 是对前端唯一翻译层（core 事件 → 协议事件）
 - `config/` 配置分两类：
   - **静态配置**（`config/static/`，只读，json 驱动）：`static_config.py` 加载器 + `config.json` 引导映射表 + `base.json`（版本等应用参数）+ `item_types.json`（载体类型注册：容量预算/AB面语义/形态）+ `effects.json`（拟真度效果注册表）+ `ui.json`（UI 参数）；模块顶层 `_SC = get_static_config()` 一次性解包，运行时零 IO
   - **用户配置**（`config/settings.py`，可读写）：AppConfig dataclass（拟真度档位/自动翻面），存 `config/user_config.json`
@@ -47,7 +46,7 @@
 - `music/` 是**用户核心数据目录**（非缓存）：`items.db`（物品库 SQLite）+ `covers/`（封面实体文件）；gitignore 忽略内容但保留目录（`music/*` + `!music/.gitkeep`）；删除前需确认（不同于可随手清理的缓存）
 - **参数约定**：可调参数一律走 `config/static/*.json`，禁止代码硬编码
 - **版本双轨**（2026-11-05 采纳 CapsulePulse 范本，替代原四段 X.Y.Z.P 口径）：机器版本唯一来源 = `config/static/base.json` 的 `version` 字段（**三段式 `X.Y.Z`**：`X.Y` 版本主线，第一版 `0.1`；`Z` 内容版本，新增内容/重构/小版本更新时 `+1`）；对外正式文本**分两类**——README 徽章用三段式（值 = `base.json` 即时推进，链接指向 Releases 页），**commit 标题用四段式 `VX.Y.Z.R`**（前三段与 `base.json` 一致，第四段 R 为修订号，只随提交历史记录、不入任何配置文件；递增规则见 Commit 提交规范）。历史四段版本（V0.1.0.0–V0.1.1.0）为既有记录保留；当前机器版本以 `base.json` 即时值为准（FIX006.15：删时点性快照，防漂移）
-- `main.py` 收编入口分发（argparse + GUI）；模块间顶层 import，不要使用函数内延迟 import（PySide6 等重依赖除外，可在函数内导入）
+- `sidecar/__main__.py` 收编进程入口分发（argparse 测试钩子）；模块间顶层 import，不要使用函数内延迟 import（PySide6 等重依赖除外，可在函数内导入）
 - `.reference/` 目录是外部项目的 git clone（浅克隆），**不纳入本仓库版本控制**；需要更新时重新 clone
 - 项目级 skill 统一在 `.agents/skills/`（19 个 = 自建 5 + skillforge + 外部收录 13）：自建为 `audit-project` / `audit-report` / `plan-task` / `progress-task` / `prune-docs`；`skillforge` 为技能创建/审计（自 `.opencode/skills/` 合并迁入，旧副本目录已删除）；外部收录 13 个（gamedev 3 + Blender 7 + taste-skill / diagram-design / ai-image-prompts-skill）源自 F:\Collection 技能库，均 MIT，来源/用途/维护约定见 `.agents/skills/README.md`；**修订一律以 `.agents/` 为准**
 - `.agents/skills/` 整目录不入库（2026-11-07 起 gitignore，与 `.reference/` 同性质的机器本地资源；ai-image-prompts 提示词库可用 `scripts/setup.js --check` 重建）；来源/用途/维护约定见 `.agents/skills/README.md`
@@ -158,7 +157,7 @@
 ### 代码约定
 
 - 注释必须用 `#`，禁止 `//` 或其他语言注释符号；所有注释使用中文
-- **正式程序文件（main.py 及 modules/、ui/、utils/、config/ 下的 .py）的注释中禁止出现任何与 `.reference/` 相关的参考标注**（如"参考：.reference/…"、"照抄自…"等）；参考来源信息只允许写在 `.temp/` 临时脚本或文档（w.study.md / x.progress.md / z.plan.md）中
+- **正式程序文件（modules/、sidecar/、utils/、config/ 下的 .py）的注释中禁止出现任何与 `.reference/` 相关的参考标注**（如"参考：.reference/…"、"照抄自…"等）；参考来源信息只允许写在 `.temp/` 临时脚本或文档（w.study.md / x.progress.md / z.plan.md）中
 - 命名风格：函数/变量用 `snake_case`，类用 `CamelCase`，常量用 `UPPER_CASE`
 - `_` 前缀：函数名前加 `_` 表示模块内部私用，如 `_format_tokens()`，外部模块不应直接调用
 - `def main()`：每个可独立运行的脚本都有 `main()` + `if __name__ == "__main__": main()`

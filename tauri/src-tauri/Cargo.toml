@@ -1,6 +1,6 @@
 [package]
 name = "mrsirmusic"
-version = "0.2.4"
+version = "0.2.5"
 description = "MrSirMusic Tauri 壳（窗口 + 侧车 IPC 桥）"
 edition = "2021"
 

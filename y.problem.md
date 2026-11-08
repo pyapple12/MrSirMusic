@@ -52,9 +52,9 @@
 
 范围：PyInstaller 打 sidecar exe（PySide6+mutagen 捆绑；已知坑：隐藏 DLL 导入、体积预期 60–100MB）→ Tauri externalBin 接线替换 dev spawn + NSIS 安装包 + 自动更新与代码签名评估。触发条件：PL010 迁移收官、parity 稳定后单独立项（发布线 PL）。来源：PL006-PL010 立项讨论（用户定案 0.2 不含打包）。
 
-5. **Qt 壳（main.py GUI + ui/）去留裁决**（2026-11-07 📌 待评估）[problems#5]：
+5. **Qt 壳（main.py GUI + ui/）去留裁决**（2026-11-07 📌→✅ 已裁决：移除）[problems#5]：
 
-现状：双入口期（Qt 壳 + Tauri 壳并存），Qt 壳为迁移安全网保留。裁决时点：0.3 首轮全量审计。裁决依据：parity 清单九项全过 + 真机使用反馈 + Tauri 版稳定性记录。选项：A 整体删除 ui/ + main.py GUI 分支 + a11-a13 探针退役（AGENTS/README 同步改写）；B 长期保留双入口。连带：容错登记制条目与 AGENTS 分层节同步。
+现状（已闭环，2026-11-08）：用户裁决 **Qt 壳不要了，直接删除**——`ui/`（21 源码）+ `main.py` 已从仓库移除（逐字副本存 `.archived/` 本机存档，git 历史 9b57236 亦可达）；a9-a14 六支 Qt 探针退役；AGENTS 分层/入口/门禁条款同步改写（单前端定案成文）。连带处置：PySide6 保留（sidecar 播放引擎运行时依赖，QtMultimedia/QtCore 非 UI 用途）；parity 清单九项于 PL008/PL009 完成后全数覆盖，无功能缺口。
 
 6. **Web Audio 直驱播放评估（0.3 优化线）**（2026-11-07 📌 待评估）[problems#6]：
 

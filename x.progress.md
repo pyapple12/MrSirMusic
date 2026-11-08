@@ -282,6 +282,15 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL010.4 y.problem 登记与容错核查 —— problems#4 打包发布线/#5 Qt 壳去留/#6 Web Audio 直驱 三条登记（本立项时已预登记，本条核对状态与内容仍准确）；AGENTS 容错登记制核查（PL007 三条 + PL009 降级语义平移条目补全齐备）；验证：登记齐全对照（2026-11-08 已验证：problems#4/5/6 三条在案内容准确（打包线触发条件/裁决时点/评估范围）+ AGENTS 容错核查五条齐备（侧车收敛/超时/重启×3/启动未就绪/Web 音效降级））
 - [x] PL010.5 PL010 收口 —— `base.json` → `0.2.4` + a1 同步；全量回归（14+a15）+ parity 终验（z.plan PL008 清单九项复核）+ dev 真机走查（冷启动/重启恢复/中文输入）+ 草拟 commit（feat: V0.2.4.1）交用户；验证：全量回归 PASS + parity 全过 + 版本三方一致（2026-11-08 已验证：0.2.4 四方一致（base/README/a1/tauri.conf+Cargo）+ **全量 15/15 PASS**（a2 曾红 = 用户开着的 Web 版占日志文件锁，**关窗后重跑即绿**——本次红本身即真机验证场景的副产品）+ 冒烟 + npm build + cargo check 过；parity 终验 = 首核 7 过 + 2 部分项（寻曲双路/档位可视联动）经 PL009 落地后复核达标；dev 真机走查与拖针手感/音效听感留用户日常使用；commit 草案已交用户）
 
+### PATCH001: Qt 壳移除与单前端定案 [problems#5 闭环] ✅
+
+> 结果：Qt 壳（ui/ 21 源码 + main.py）整体移除（逐字副本存 .archived/，git 历史 9b57236 亦可达）；a9-a14 六支 Qt 探针退役；回归命令收敛为九探针（a1-a8+a15）；AGENTS 分层/入口/门禁/双前端条款全面改写为单前端定案；PySide6 保留（sidecar 播放引擎运行时依赖，非 UI 用途）。全量 9/9 + 冒烟 + npm build + cargo check 过 + Web 运行时 DOM 健康断言过 + 零 ui/ 引用残留。
+
+- [x] PATCH001.1 Qt 壳删除 —— git rm `ui/`（21 源码文件）+ `main.py`（GUI 入口）；物理残留（空目录/__pycache__）清空；.archived/ 本机副本先前已在（逐字 diff 验证过）；a9-a14 六支 Qt 探针退役删除；验证：modules/sidecar/utils/config 零 ui/ 引用 grep + 冒烟（2026-11-08 已验证：ui/ 物理清空 + 引用零残留 grep 过 + 冒烟过）
+- [x] PATCH001.2 探针体系收敛 —— 回归命令从十五探针收敛为九探针（a1-a8 业务/配置/协议 + a15 侧车全链；a9-a14 Qt 壳层探针随壳退役——其历史勾选记录全量保留于已完成区不删）；AGENTS 回归命令同步；验证：九探针全绿（2026-11-08 已验证：九探针全 PASS）
+- [x] PATCH001.3 登记与文档改写 —— AGENTS 六处（入口行改 sidecar/__main__、冒烟命令去 ui、分层条款改单前端+播放特许注记、双前端条款改单前端定案（problems#5 闭环成文）、正式文件范围去 main.py/ui、门禁行去 main.py --version）；README 简介/使用说明（Web 版单入口）/结构树（去 main.py/ui/）；requirements.txt PySide6 注释如实化（sidecar 播放引擎运行时依赖非 UI 用途）；y.problem problems#5 状态回改 ✅ 已裁决；验证：文档走查（2026-11-08 已验证：六处 AGENTS + README 三段 + requirements + y.problem 全部如实改写，grep 无 Qt 壳残留条款）
+- [x] PATCH001.4 PATCH001 收口 —— `base.json` → `0.2.5` + 五方同步（README 徽章/a1/tauri.conf/Cargo.toml）+ 全量验证（冒烟 + 九探针 + npm build + cargo check + Web 运行时 DOM 健康断言）+ 草拟 commit 交用户；验证：全量 PASS + 五方一致（2026-11-08 已验证：0.2.5 五方一致 + 全量 9/9 PASS + 双构建过 + DOM 健康断言过（tab-bar/library-layout/deck-bar 在位、无 dead 横幅）+ commit 草案已交用户）
+
 ## 未完成
 
-（0.2 迁移线全部收官——后续线：打包发布（problems#4）/Qt 壳去留裁决（problems#5，0.3 审计）/Web Audio 直驱评估（problems#6，0.3 优化线）均走独立立项；优化与深度测试按用户定案 0.3 单独立项）
+（Qt 壳移除后进入 Web 版单前端维护期——后续线：打包发布（problems#4）/Web Audio 直驱评估（problems#6，0.3 优化线）/优化与深度测试按用户定案单独立项）

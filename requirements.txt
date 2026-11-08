@@ -1,3 +1,3 @@
-# MrSirMusic 第一版依赖（A0.3 起步；后续按需添加，见 z.plan.md）
+# MrSirMusic 依赖（0.2 起 PySide6 为 sidecar 播放引擎运行时依赖——QtMultimedia 播放与 QtCore 事件循环，非 UI 用途；见 z.plan 附录 PL010）
 PySide6>=6.8
 mutagen>=1.47
