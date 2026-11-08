@@ -1,0 +1,184 @@
+/* 基础样式（PL007.4）：CSS 变量消费 ui.json colors（theme.ts 注入），深棕主题对齐 Qt 版 */
+/* 覆盖面：布局壳/卡片/按钮/传输条——refined 观感留 PL008/PL009 精修 */
+
+:root {
+  /* ui.json colors 缺省回退（与 ui/themes.py c 字典回退值同源） */
+  --mm-primary: #8b6f47;
+  --mm-secondary: #2c2c2c;
+  --mm-hover: #9c7f55;
+  --mm-pressed: #6b5533;
+  --mm-border: #3a3a3a;
+  --mm-background: #232323;
+  --mm-text: #eae6df;
+  --mm-text_on_primary: #ffffff;
+  --mm-surface: #35302a;
+  --mm-panel: #3a342c;
+  --mm-muted: #9a938a;
+  --mm-disabled: #45403a;
+  --mm-font: "Microsoft YaHei";
+}
+
+* {
+  font-family: var(--mm-font);
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--mm-secondary);
+  color: var(--mm-text);
+  font-size: 14px;
+}
+
+#app {
+  /* PL007.5：Grid 双列（1fr 主区 + 260px 传输条）——in-flow 结构性布局 */
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  height: 100vh;
+}
+
+main {
+  min-width: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+/* 侧车死亡横幅（PL007.3 韧性链路终点） */
+.dead-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 10px 16px;
+  background: #7a3a2a;
+  color: #ffe8df;
+  border-bottom: 1px solid var(--mm-border);
+}
+
+/* 置物架分组（PL007.5） */
+.shelf-group {
+  border: 1px solid var(--mm-border);
+  border-radius: 6px;
+  background: var(--mm-surface);
+  margin-bottom: 10px;
+  padding: 8px;
+}
+
+.shelf-group > h3 {
+  margin: 0 0 8px 0;
+  color: var(--mm-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.shelf-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* 物品卡片（128×128 对齐 ui.json card_size；木纹底 PL009 精修） */
+.card {
+  width: 128px;
+  height: 128px;
+  border: 1px solid var(--mm-border);
+  border-radius: 6px;
+  background: var(--mm-background);
+  color: var(--mm-text);
+  cursor: pointer;
+  padding: 10px 6px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.card:hover {
+  border-color: var(--mm-primary);
+}
+
+.card img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.card .card-name {
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.card .card-sub {
+  font-size: 11px;
+  color: var(--mm-muted);
+}
+
+/* 最小传输条（PL007.5） */
+.deck-bar {
+  /* Grid 内联子项：结构性占右列（不依赖定位/层序/合成层） */
+  height: 100%;
+  background: var(--mm-surface);
+  border-left: 1px solid var(--mm-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.deck-bar .track-title {
+  font-size: 15px;
+  text-align: center;
+}
+
+.deck-bar .track-artist {
+  font-size: 12px;
+  color: var(--mm-muted);
+  text-align: center;
+}
+
+.deck-bar .progress-track {
+  width: 200px;
+  height: 4px;
+  background: var(--mm-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.deck-bar .progress-fill {
+  height: 100%;
+  background: var(--mm-primary);
+  transition: width 0.3s linear;
+}
+
+.deck-bar .time-row {
+  font-size: 11px;
+  color: var(--mm-muted);
+}
+
+.deck-bar button {
+  width: 96px;
+  padding: 8px 0;
+  background: var(--mm-primary);
+  color: var(--mm-text_on_primary);
+  border: 1px solid var(--mm-pressed);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.deck-bar button:hover {
+  background: var(--mm-hover);
+}
+
+.deck-bar button:active {
+  background: var(--mm-pressed);
+}
+
+.empty-hint {
+  color: var(--mm-muted);
+  padding: 24px;
+}

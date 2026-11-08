@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.2.0-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.2.1-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
@@ -16,6 +16,7 @@ Windows 拟物音乐播放器（Python + PySide6）：不使用文件夹/播放�
 
 - [快速开始](#快速开始)
 - [使用说明](#使用说明)
+- [Web 版（开发中）](#web-版开发中)
 - [项目结构](#项目结构)
 - [许可证](#许可证)
 
@@ -75,6 +76,20 @@ py -3.14 -m venv .venv
 ### 设置（拟真度）
 
 菜单 **设置 → 设置…**：拟真度档位（简洁/精致/真实——磨损贴图、转盘动画与拟真音效强度）与自动翻面，保存后重启保持。
+
+## Web 版（开发中）
+
+Tauri + Web 前端 + Python sidecar 的迁移版（PL007 起，方案见 `z.plan.md` 附录 PL006–PL010）。业务逻辑与 Qt 版完全共享（`modules/` + `sidecar/` 进程），前端独立于 `tauri/`。
+
+**前置**：Rust toolchain（rustup）+ Node.js 22+；**运行**：
+
+```bash
+cd tauri
+npm install
+npm run tauri dev
+```
+
+当前完成度：置物架视图 + 最小传输条（点卡片播放/暂停/进度显示），侧车崩溃自动重启。打包安装器不做（后续发布线）；拟物唱机 Web 化在 PL009。
 
 ## 项目结构
 

@@ -248,3 +248,9 @@ music/*
 
 # Qt 前端迁移前快照（本机存档副本，git 历史另有同状态快照可检出）
 .archived/
+
+# Tauri 壳构建产物与依赖（PL007；源码 tauri/ 正常入库）
+tauri/node_modules/
+tauri/dist/
+tauri/src-tauri/target/
+tauri/src-tauri/gen/

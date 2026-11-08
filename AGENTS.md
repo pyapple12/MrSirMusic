@@ -34,6 +34,8 @@
 
 - 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `ui/`（界面）与 `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 ui/ 与 sidecar/app.py 两处**（sidecar 仅 QtCore 无 GUI：QCoreApplication/QObject/Signal 进程骨架特许）
 - `sidecar/` 侧车进程（PL006 定案）：stdio JSON Lines 协议对外暴露 modules/ 业务（信封定案见 z.plan 附录 PL006）；**modules/ 零改动纯委托**；协议编解码/常量单源 `sidecar/protocol.py`；命令表与错误分类单源 `sidecar/commands.py`；优雅退出 = stdin EOF（engine.stop 先行）；测试钩子 `--db/--config`（对称 set_db_path_for_tests 惯例，探针隔离不污染真实数据）；stdout 协议流零污染（日志走 stderr + 文件）
+- `tauri/` Tauri 壳（PL007 定案）：Rust 窗口 + WebView2 前端（Vite + Vue 3 + TS，源码 `tauri/src/`）+ Rust IPC 桥（`tauri/src-tauri/src/sidecar.rs`——dev spawn `.venv` python 直跑 sidecar、id 关联应答 60s 超时、崩溃指数退避重启×3→`sidecar://dead`）；**壳零业务**（全部转发 sidecar）；主题桥 = ui.json → CSS custom properties（配置单源不变）；**打包/安装器不做**（发布线 problems#4，`bundle.active=false`）；gitignore `tauri/node_modules|dist|src-tauri/target`
+- **WebView2 前端陷阱**（2026-11-08 实测）：①页面加载后 CSS/JS 走 vite HMR——HMR 断连或缓存陈旧会让"改了没反应"，排查先清 WebView2 数据目录（`%LOCALAPPDATA%\<identifier>\`）重启；②带 `overflow:auto` 的合成滚动容器可能盖住后续普通流层——右侧固定面板类布局用 **Grid 内联子项**（结构性占位，勿依赖 z-index）；③PrintWindow 截 WebView2 需 `PW_RENDERFULLCONTENT(0x2)` 且可能丢独立合成层——取证以多帧交叉为准
 - `modules/` 是**唯一可被未来复用的层**（Web / Godot 后续计划只换 ui/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
 - `modules/` 零 UI 依赖：禁止 import PySide6/Qt 任何类型；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`ui/bridge/` 是唯一翻译层（core 事件 → Qt 信号）
 - `config/` 配置分两类：
@@ -136,6 +138,9 @@
 - **未知载体形态回退黑胶绘制**（PL002 引入 / FIX006.7 登记）：场景——item_types 配置 shape 非法或类型键未知；降级行为——按黑胶/circle 绘制 + 告警一次；理由——拟物绘制为装饰层，不得阻断载入与播放
 - **贴图加载失败回退矢量绘制**（PL005 引入 / 2026-11-07 登记）：场景——data/textures 贴图缺失或损坏（精简分发漏带资产/路径错误）；降级行为——每键告警一次并按现有矢量渐变绘制，播放与拟物交互不受影响；理由——贴图为装饰层，与噪点叠加同性质的画质增强，不得阻断拟物绘制与播放
 - **侧车单命令异常收敛信封**（PL006 引入 / 2026-11-08 登记）：场景——任一命令处理抛未分类异常（命令层 bug/依赖环境突变）；降级行为——记日志（含栈）+ 返回 internal 错误信封，进程与事件循环不退出；理由——单命令失败不得杀死整个后端进程（前端还有重启策略兜底，PL007.3），错误信封保证前端可提示可重试
+- **Tauri 壳侧车响应超时**（PL007 引入 / 2026-11-08 登记）：场景——前端命令发出后侧车 60s 未应答（侧车卡死/崩溃瞬间/命令处理长阻塞）；降级行为——Rust 桥返回错误串给前端（promise reject），并从 pending 表清理该请求；理由——前端不能无限等待，错误可提示可重试
+- **Tauri 壳侧车崩溃重启×3**（PL007 引入 / 2026-11-08 登记）：场景——侧车进程意外退出（崩溃/被杀/环境突变）；降级行为——指数退避（1s/2s/4s）自动重启最多 3 次，未决请求全部以 internal 信封落空；3 次耗尽发 `sidecar://dead` 事件，前端显示错误横幅并停止重试；理由——瞬时崩溃自愈、持续崩溃不无限循环，用户可感知
+- **Tauri 壳启动期侧车未就绪**（PL007 引入 / 2026-11-08 登记）：场景——前端 bootstrap 命令在侧车尚未完成启动时发出（窗口先于侧车就绪）；降级行为——Rust 桥 child 写柄为空时直接返回"侧车未运行"错误（同超时路径），前端加载态轮询直至 bootstrap 成功；理由——启动竞态不可避免，错误路径统一可重试
 
 ### 函数注释规则
 
@@ -172,7 +177,7 @@
 
 ## Git 注意
 
-- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.agents/skills/`、`.mimosa/`、`.zcode/`、`.archived/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 纳入版本控制
+- `.gitignore` 忽略 `.venv/`、`.reference/`、`.temp/`、`.opencode/`、`.agents/skills/`、`.mimosa/`、`.zcode/`、`.archived/`、`tauri/node_modules/`、`tauri/dist/`、`tauri/src-tauri/target/`、`__pycache__/`、`*.py[cod]`、`.ruff_cache/`、`.vscode/`、`.idea/`、`config/user_config.json`、日志目录；**关键规则**：`music/*` + `!music/.gitkeep`（物品库数据忽略内容但保留目录）；对这些文件的修改不会出现在 `git status` 中；`AGENTS.md`、`README.md`、`z.plan.md`、`x.progress.md`、`w.study.md`、`y.problem.md` 纳入版本控制
 - 严禁将 API key、authCookie、workspaceId 等凭据提交到仓库
 - 未经用户明确要求，不得擅自执行 `git add`、`git commit` 或任何其他 Git 写操作
 
