@@ -27,7 +27,8 @@ class CommandError(Exception):
 
 
 def _item_to_dict(item: Item) -> dict[str, Any]:
-    # Item → 协议 dict（前端渲染全量；is_missing 为方法调用结果显式带上）
+    # Item → 协议 dict（前端渲染全量；is_missing 为方法调用结果显式带上；
+    # PATCH003 增 play_count——详情面板播放次数行数据源）
     return {
         "id": item.id,
         "name": item.name,
@@ -35,6 +36,7 @@ def _item_to_dict(item: Item) -> dict[str, Any]:
         "cover_source": item.cover_source,
         "cover_path": item.cover_path,
         "tag": item.tag,
+        "play_count": item.play_count,
         "total_seconds": item.total_seconds(),
         "sides": [
             {
@@ -93,8 +95,10 @@ def _cmd_list_items(session: Any, params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cmd_load_item(session: Any, params: dict[str, Any]) -> dict[str, Any]:
-    # 载入物品到引擎（不自动播放；播放走 transport_play）
+    # 载入物品到引擎（不自动播放；播放走 transport_play）；
+    # 先记 current_item_id 再 load——load 内部即发 TRACK_CHANGED（PATCH003 计数依赖该锚点）
     item = _find_item(session, _require_str(params, "item_id"))
+    session.current_item_id = item.id
     session.engine.load_item(item)
     return {"loaded": True}
 

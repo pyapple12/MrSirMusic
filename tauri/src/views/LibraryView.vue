@@ -67,6 +67,7 @@ function onContext(item: ItemDict, event: MouseEvent) {
       <div class="detail-line">
         总时长：{{ Math.round(selected.total_seconds) }} 秒
       </div>
+      <div class="detail-line">播放次数：{{ selected.play_count }}</div>
       <div
         v-for="side in selected.sides"
         :key="side.label"

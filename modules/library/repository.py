@@ -195,7 +195,7 @@ def delete_item(item_id: str) -> None:
 
 def update_item(item: Item) -> None:
     # 更新 items 行字段（name/tag/cover），不动 tracks（与 save_item 区分）；
-    # FIX006.13：play_count 不再写回（bump 链已移除，列保留读兼容——决策备忘 y.problem.md P3）
+    # play_count 不在此写回——计数走 increment_play_count 单列自增（PATCH003），避免全量覆盖
     conn = _connect()
     try:
         conn.execute(
@@ -215,6 +215,22 @@ def update_item(item: Item) -> None:
         conn.close()
 
 
+def increment_play_count(item_id: str) -> bool:
+    # 播放计数自增（PATCH003 接线）：SQL 单列原子自增（play_count = play_count + 1），
+    # 不经内存 Item 全量写回——防与其他写链（save_item/update_item）竞争回滚计数；
+    # 物品不存在 → rowcount 0 → False（调用方降级忽略）
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE items SET play_count = play_count + 1 WHERE id=?",
+            (item_id,),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 # ===== modules/library/repository.py 函数/常量说明 =====
 # _ITEM_TYPES_CFG: 载体类型配置（加载时重建 ItemType，从 static_config 一次性解包）
 # _connect() -> Connection: 连接（外键 ON + Row 工厂 + migrate 确保 schema）
@@ -224,6 +240,8 @@ def update_item(item: Item) -> None:
 # load_all() -> list[Item]: 全量（两查询内存组装，无 N+1）
 # load_item(id) -> Item | None: 单查（无 → None）
 # delete_item(id): 删除（外键级联 tracks）
-# update_item(item): 只更新 items 行（改元数据，不重建 tracks；FIX006.13 起不写 play_count）
-#   设计理由：save 与 update 职责分离（整体重建 vs 行更新）；全量事务保证一致性
+# update_item(item): 只更新 items 行（改元数据，不重建 tracks；play_count 不在此写回）
+# increment_play_count(id) -> bool: 计数单列原子自增（PATCH003；不存在 → False）
+#   设计理由：save 与 update 职责分离（整体重建 vs 行更新）；全量事务保证一致性；
+#     计数走独立自增而非内存对象写回——杜绝缓存陈旧值经 save_item/update_item 覆盖计数
 #   关联配置：DB_PATH（schema.py）、载体类型（item_types.json）

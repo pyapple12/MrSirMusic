@@ -3,7 +3,7 @@
 - 任务清单定稿：2026-08-14
 - 依据：z.plan.md（MrSirMusic 项目方案 v1.0）
 - 编号：A 系列（新项目首轮），组号 = 开发阶段，组内条目 `A{组}.{序号}`
-- 约定：全部验证命令在项目根目录、`.venv` 解释器下执行；GUI 验证用 `QT_QPA_PLATFORM=offscreen` 免弹窗；正式文件注释禁止 `.reference/` 标注
+- 约定：全部验证命令在项目根目录、`.venv` 解释器下执行；正式文件注释禁止 `.reference/` 标注（GUI offscreen 验证约定已随 Qt 壳退役，2026-11-08）
 
 > 文件职责（2026-11-05 对齐 CapsulePulse 范本）：任务清单与进度追踪，与 `z.plan.md` 配套——方案在 z.plan 附录展开，执行拆条在本文件勾选。结构：**`## 已完成 ✅` 区在前、`## 未完成` 区在后**，两区内部从上到下 = 从旧到新，新组追加在区末尾；已完成组全量保留、只增不删。
 > 格式速查：任务组 `### PL{NNN}: {标题} [来源引用]`（来源：[z.plan#附录 PL{NNN}] / [problems#N] / [audit#A{NNN}]）；子任务 `- [ ] PL{NNN}.{序号} {标题} —— {做法}；验证：{检验方式}`；审计修复组 `### FIX{NNN}` 与审计附录 `A{NNN}` **恒同号**（条目内 `[P{级别}]` 标注）；小修组 `### PATCH{NNN}`——编号轨道三线与 A/FIX 绑定细则见 AGENTS「任务清单纪律」。
@@ -290,6 +290,32 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PATCH001.2 探针体系收敛 —— 回归命令从十五探针收敛为九探针（a1-a8 业务/配置/协议 + a15 侧车全链；a9-a14 Qt 壳层探针随壳退役——其历史勾选记录全量保留于已完成区不删）；AGENTS 回归命令同步；验证：九探针全绿（2026-11-08 已验证：九探针全 PASS）
 - [x] PATCH001.3 登记与文档改写 —— AGENTS 六处（入口行改 sidecar/__main__、冒烟命令去 ui、分层条款改单前端+播放特许注记、双前端条款改单前端定案（problems#5 闭环成文）、正式文件范围去 main.py/ui、门禁行去 main.py --version）；README 简介/使用说明（Web 版单入口）/结构树（去 main.py/ui/）；requirements.txt PySide6 注释如实化（sidecar 播放引擎运行时依赖非 UI 用途）；y.problem problems#5 状态回改 ✅ 已裁决；验证：文档走查（2026-11-08 已验证：六处 AGENTS + README 三段 + requirements + y.problem 全部如实改写，grep 无 Qt 壳残留条款）
 - [x] PATCH001.4 PATCH001 收口 —— `base.json` → `0.2.5` + 五方同步（README 徽章/a1/tauri.conf/Cargo.toml）+ 全量验证（冒烟 + 九探针 + npm build + cargo check + Web 运行时 DOM 健康断言）+ 草拟 commit 交用户；验证：全量 PASS + 五方一致（2026-11-08 已验证：0.2.5 五方一致 + 全量 9/9 PASS + 双构建过 + DOM 健康断言过（tab-bar/library-layout/deck-bar 在位、无 dead 横幅）+ commit 草案已交用户）
+
+### PATCH002: ui.json 死键清理（Web 版零消费参数） [文档对齐复查发现] ✅
+
+> 结果：ui.json 删 Qt 壳时代死键 11 处（窗口尺寸/动画时长/缩略图/拖拽阈值/部件尺寸/封面过滤——Web 前端零消费），保留活键 4 处（font_family/colors/card_size/progress_interval_ms）；static_config 白名单四处同步；a1 断言改写 + 死键反向断言防回归；deckMath TONEARM_DROP_MS 注记常量唯一事实源。**执行复查重大发现**：.gitignore 模板裸 `lib/` 规则自初始提交起误吞前端源码 `tauri/src/lib/` 五文件（deckMath/ipc/sounds/theme/types 从未入库，clone 侧无法编译）——锚定 `/lib/` 修正并全项目扫描确认无其他误伤。冒烟 + 九探针 9/9 + npm build + cargo check 全过；base.json 不动（纯清理无内容增量）。
+
+- [x] PATCH002.1 ui.json 死键删除 —— 逐键消费方 grep 定案（零消费方 = 死键）：删 window_width/window_height/animation（含 record_spin_ms/tonearm_drop_ms）/thumbnail_size/shelf_thumbnail_size/drag_threshold/record_widget_size/deck_widget_size/spin_tick_ms/cover_image_filter；验证：冒烟 + a1（2026-11-08 已验证：ui.json 仅存四活键，a1 正反向断言过）
+- [x] PATCH002.2 static_config 白名单同步 —— `_NUMERIC_UI_KEYS` 收敛为 ("progress_interval_ms",)；`_STRING_UI_KEYS` 收敛为 ("font_family",)；`_NESTED_NUMERIC` 删 animation 条目；`_load_static_config` ui 分支 dict_keys 去 animation；验证：a1 四分类契约 + 坏 JSON 容错回归（2026-11-08 已验证：a1 PASS）
+- [x] PATCH002.3 probe_a1 断言改写 —— A1.4 保留键断言改四活键（font_family/colors/card_size/progress_interval_ms + colors primary/secondary）；新增死键反向断言十键（存在即 FAIL 防回归）；验证：a1 全绿（2026-11-08 已验证）
+- [x] PATCH002.4 deckMath 注释如实化 + 文档落盘 —— `tauri/src/lib/deckMath.ts` TONEARM_DROP_MS 注释改"常量唯一事实源"（原注误指 ui.json 缺省）；z.plan 附录 PATCH002 + 本组落盘；验证：npm build + cargo check + 全量九探针（2026-11-08 已验证：9/9 PASS + 双构建过）
+- [x] PATCH002.5 gitignore lib/ 规则修正（前端源码补全）—— `.gitignore` 模板裸 `lib/` 锚定为 `/lib/`（附注释说明肇事史）；`tauri/src/lib/` 五源码解除忽略（deckMath/ipc/sounds/theme/types——自 PL007 起被吞未入库，git status 不显被忽略文件故历次漏文件复查均未发现）；全项目 `git ls-files --others -i` 扫描确认其余命中均为设计内忽略（.history/.opencode）；验证：check-ignore 解除 + git status 显形 untracked + npm build（2026-11-08 已验证：五文件显形待入库，双构建过——clone 完整性随本批提交恢复）
+
+### PATCH003: 播放计数接线（方案 A） [y.problem#3 拍板] ✅
+
+> 结果：播放计数全链打通——repository `increment_play_count` SQL 单列原子自增；Session 增 `current_item_id` 锚点 + TRACK_CHANGED 独立订阅回写（载入首曲/自动/手动切曲/翻面各计一次，暂停恢复与 seek 不计）；`_item_to_dict`/types.ts 增 play_count；LibraryView 详情面板加回"播放次数"行。口径与 y.problem 草案字面偏差（"曲目开始"计而非"终结"计）如实注记于 z.plan 附录。写库失败降级登记 AGENTS 容错。冒烟 + 九探针 9/9（a15 新增计数端到端断言）+ 双构建过。
+
+- [x] PATCH003.1 repository 自增函数 —— `modules/library/repository.py` 新增 `increment_play_count(item_id) -> bool`（`UPDATE items SET play_count = play_count + 1 WHERE id=?`，rowcount>0 判存；单列原子自增不经内存 Item——防陈旧缓存经 save_item/update_item 写回覆盖计数；文件尾说明区同步）；验证：a15 端到端（2026-11-08 已验证：load/play 后 list_items 读回 play_count=1+）
+- [x] PATCH003.2 Session 计数回写 —— `sidecar/app.py`：`__init__` 增 `current_item_id` 锚点；`_on_track_changed` 回写（锚点判空 → increment → 缓存对象 play_count 同步 → 异常日志降级）；`_wire_event_pump` 增 TRACK_CHANGED 独立订阅（与前端泵并行）；顶层 import increment_play_count；文件尾说明区同步；AGENTS 容错登记制补"播放计数写库失败静默降级"；验证：a15 计数段（2026-11-08 已验证）
+- [x] PATCH003.3 协议与前端字段 —— `sidecar/commands.py` `_cmd_load_item` 先记锚点再 load（load 内部即发 TRACK_CHANGED——顺序敏感）；`_item_to_dict` 增 play_count；`tauri/src/lib/types.ts` ItemDict 增 play_count；`tauri/src/views/LibraryView.vue` 详情面板加"播放次数：{{ selected.play_count }}"行（PL008.1 曾省略——功能拍板成立后加回）；验证：a15 list_items 字段断言 + npm build（2026-11-08 已验证）
+- [x] PATCH003.4 收口 —— `base.json` → `0.2.6` + 五方同步（tauri.conf/Cargo.toml/Cargo.lock/package.json/README 徽章）+ a1 断言同步 + 全量验证 + y.problem#3 状态回改 ✅；验证：冒烟 + 九探针 9/9 + npm build + cargo check + 版本五方一致（2026-11-08 已验证：全过）
+
+### PATCH004: 空 A 面面序拦截 [A006 观察项拍板] ✅
+
+> 结果：`check_item` 增第四项检查——非空面不含 A 即拒绝（"A 面为空而其他面有曲（面序不成立）"），拟物面序语义把关（生成端分配器先填 A 造不出该态，本规则拦编辑/未来写链；engine F3.1 容忍语义保留不动）。a5 探针三断言（拒绝/全空不误触发/正常 AB 不误伤）。a15/a5/a1 随批回归全绿。
+
+- [x] PATCH004.1 check_item 面序规则 —— `modules/rules/generate_check.py`：`check_item` 在空物品检查后增非空面集合判定（`non_empty_sides` 非空且 "A" 不在内 → 追加面序问题）；模块头/文件尾说明区同步（四项检查口径）；注释注明拍板来源与 engine 容忍语义边界；验证：a5 三断言（2026-11-08 已验证：空 A+B 有曲拒、全空走"空物品"文案、正常 AB 通过）
+- [x] PATCH004.2 探针与文档 —— `.temp/probe_a5_rules.py` 增 PATCH004 三断言 + PASS 行文案更新；z.plan 附录 PATCH004 + 本组落盘；验证：a5 全绿（2026-11-08 已验证；首跑红灯为探针断言方向笔误——"不误触发"断言写成正向，修正后绿）
 
 ## 未完成
 

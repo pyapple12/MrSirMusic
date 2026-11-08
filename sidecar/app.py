@@ -11,7 +11,7 @@ from PySide6.QtCore import QCoreApplication, QObject, Signal
 
 from config.static.static_config import get_static_config
 from modules.library.path_check import mark_missing
-from modules.library.repository import load_all
+from modules.library.repository import increment_play_count, load_all
 from modules.playback.engine import PlaybackEngine
 from modules.playback.event_bus import subscribe
 from modules.playback.events import (
@@ -51,6 +51,7 @@ class Session(QObject):
         self.engine = PlaybackEngine()
         self.reporter = ProgressReporter(self.engine)
         self.items: list = []
+        self.current_item_id = ""  # 当前载入物品 id（播放计数回写锚点；load_item 命令设置）
         self._stdout_lock = threading.Lock()
         self._line_received_connected = False
 
@@ -181,6 +182,8 @@ class Session(QObject):
         }
         for domain_name, wire_name in mapping.items():
             subscribe(domain_name, self._make_pump_callback(wire_name))
+        # 播放计数回写（PATCH003）：独立订阅 TRACK_CHANGED（与前端泵并行，互不影响）
+        subscribe(TRACK_CHANGED, self._on_track_changed)
 
     def _make_pump_callback(self, wire_name: str):
         # 生成闭包（默认参数绑定 wire_name——防循环变量迟到绑定）
@@ -189,6 +192,21 @@ class Session(QObject):
             self.emit_event(wire_name, _payload_to_dict(payload))
 
         return _pump
+
+    def _on_track_changed(self, _payload: Any) -> None:
+        # 播放计数回写（PATCH003 接线）：TRACK_CHANGED 即计一次——载入首曲/自动切曲/手动
+        # 切曲/翻面各计（暂停恢复与 seek 不发该事件故不计）；SQL 原子自增 + 会话缓存对象
+        # 同步（防陈旧值经 save_item/update_item 写回覆盖）；失败降级日志一次不阻断播放
+        if not self.current_item_id:
+            return
+        try:
+            if increment_play_count(self.current_item_id):
+                for item in self.items:
+                    if item.id == self.current_item_id:
+                        item.play_count += 1
+                        break
+        except Exception:
+            _logger.exception("播放计数写库失败（降级忽略，播放不受影响）")
 
     def emit_event(self, name: str, data: Any = None) -> None:
         # 协议事件写出（ready/library_changed/config_changed + 域事件泵共用出口）
@@ -213,7 +231,9 @@ class Session(QObject):
 #   _read_stdin_loop(): 守护线程按行读 → 解码 → 信号；EOF → eof_received
 #   _handle_line(line): 主线程槽——解析/分发/响应；单命令异常收敛为错误信封（进程不因命令崩溃）
 #   _last_req_id(line): 异常路径回捞请求 id（回 0 可丢弃）
-#   _wire_event_pump(): event_bus 五事件 → 协议事件（映射表单源；闭包默认参防迟到绑定）
+#   _wire_event_pump(): event_bus 五事件 → 协议事件（映射表单源；闭包默认参防迟到绑定）+ 计数订阅
+#   _on_track_changed(payload): 播放计数回写（PATCH003）——TRACK_CHANGED 即计一次（载入/切曲/
+#     翻面；暂停恢复与 seek 不计）；increment_play_count SQL 原子自增 + 缓存对象同步；异常降级
 #   emit_event(name, data): 事件统一出口（ready/library_changed/config_changed/域事件）
 #   _write_message(message): stdout 单写者（锁 + 逐行 flush；JSON Lines 帧纪律）
 #   设计理由：Qt 对象主线程纪律（QMediaPlayer/ProgressReporter 均主线程）；stdout 协议流零污染

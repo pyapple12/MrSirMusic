@@ -1,10 +1,10 @@
 # MrSirMusic 项目说明
 
-拟物音乐播放器（Python + PySide6）：不使用文件夹/播放列表，而是通过**拟物物品**（黑胶/磁带/CD）承载音乐。物品由用户手动选歌**生成**（硬容量约束），持久保存在**物品库**（`music/`），可陈列于**置物架**（按 Tag 分类），点选放入**拟物唱机**播放。第一版范围：拟物 + 播放 + 生成 + 基础 UI，无联网依赖。方案全文见同目录 `z.plan.md`，任务清单见 `x.progress.md`。
+拟物音乐播放器（Python sidecar + Tauri/Web 前端）：不使用文件夹/播放列表，而是通过**拟物物品**（黑胶/磁带/CD）承载音乐。物品由用户手动选歌**生成**（硬容量约束），持久保存在**物品库**（`music/`），可陈列于**置物架**（按 Tag 分类），点选放入**拟物唱机**播放。无联网依赖。方案全文见同目录 `z.plan.md`，任务清单见 `x.progress.md`。
 
 ## 运行与验证
 
-- 入口 `sidecar/__main__.py`（`python -m sidecar`，stdio JSON Lines 协议进程，Web 版后端）；版本单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用；Qt 壳已于 0.2.5 移除（副本存 `.archived/`，裁决记录 problems#5）
+- 入口 `sidecar/__main__.py`（`python -m sidecar`，stdio JSON Lines 协议进程，Web 版后端）；版本单一来源在 `config/static/base.json` 的 `version` 字段，其他模块用 `get_static_config().base["version"]` 引用；Qt 壳已于 0.2.5 移除（逐字副本存 `.archived/`）
 - 改动后验证（冒烟 import）：`.\.venv\Scripts\python.exe -c "import modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, sidecar.protocol, sidecar.commands, sidecar.app, sidecar.__main__, utils.logger, utils.file_utils, utils.retry, utils.convert"`
 - 全量探针回归（.temp/probe_*.py）：`foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a15_sidecar')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归（a15 为子进程协议探针，随批回归；a9-a14 Qt 探针已随 Qt 壳移除退役）
 - Web 版运行（唯一前端，dev 模式）：`cd tauri; npm install; npm run app`——tauri dev 一键起壳 + dev spawn `.venv` python 直跑 sidecar；`npm run build`（tauri 内）验证前端编译；`cargo check`（src-tauri 内）验证 Rust 侧；协议层单独验证 = a15 探针（见上）；打包不做（发布线 problems#4）
@@ -14,8 +14,7 @@
 
 - `.venv` 是机器绑定的：`pyvenv.cfg` 的 `home` 指向创建时机器的 Python 路径。换机器/换用户后解释器损坏，症状是 VSCode Python 扩展报 `write EPIPE / Shutting down server`（Jedi 语言服务器无法启动）。重建：`Remove-Item -Recurse -Force .venv; py -3.14 -m venv .venv; .\.venv\Scripts\python.exe -m pip install -r requirements.txt`，然后在 VSCode 重选解释器
 - opencode 的 pylsp 配置在 `.opencode/opencode.json`，路径硬编码为项目 `.venv` 路径——换机器需同步修改
-- Qt 平台：无头验证必须 `QT_QPA_PLATFORM=offscreen`；Windows 原生运行 GUI
-- **offscreen 无中文字体**：截图探针中文字全部呈 □ 占位——文字排版类评审/核对（字体层级、行高）必须真机截图，offscreen 截图只用于布局/色彩/控件判断（2026-11-05 UI 评审实测）
+- Qt 平台：Qt 壳已移除——现存 Qt 用途仅 sidecar 内 QtMultimedia/QtCore 播放引擎（QCoreApplication 无头运行，无需 QPA 平台插件）；原 offscreen 截图纪律（含"offscreen 无中文字体"陷阱）随 a9-a14 Qt 探针退役（历史经验见 git 历史）
 - **假音频文件无法真解码**：手写 RIFF 头的空文件会被 FFmpeg 后端拒（`errorOccurred → ERROR → stopped`）——播放链探针必须用 `wave` 模块生成真实 PCM 音频，否则播放态/唱针联动等断言连锁失真（2026-11-05 实测）
 - **QMediaPlayer 持媒体文件句柄**（Windows 文件锁）：播放/加载后立即 rename/删除音频文件会 `PermissionError`——探针先 `setSource(QUrl())` 清空源释放句柄 + rename 加重试（probe_a14 实测）
 - **stdio 协议流纪律**（sidecar，2026-11-08 实测）：JSON Lines 管道有缓冲——写信封必须**逐行 flush**，否则父进程读不到（a15 红灯证据）；stdout 是协议专用流，任何日志/第三方诊断不得写入（logging StreamHandler 默认 stderr、FFmpeg 诊断也在 stderr——天然不污染，spawn 侧 `stderr=DEVNULL` 即可）
@@ -24,9 +23,9 @@
 
 > 对齐 CapsulePulse"自动格式化与静态检查"纪律：**改完必须跑，不通过不得宣称完成**；环境缺工具时先报告用户，不得静默跳过。
 
-- **编辑任何 `.py`（main/modules/ui/utils/config）后**：跑冒烟 import 命令（见"运行与验证"），全过才算完成
-- **行为改动后**：跑全量 14 探针回归（offscreen）+ 受影响模块对应探针逐项核对
-- **UI/视觉改动后**：跑 `.temp/ui_review_shots.py` 重拍截图 + 多模态读图核对（读图规则见"操作注意"）
+- **编辑任何 `.py`（modules/sidecar/utils/config）后**：跑冒烟 import 命令（见"运行与验证"），全过才算完成
+- **行为改动后**：跑全量九探针回归（a1-a8 + a15）+ 受影响模块对应探针逐项核对
+- **UI/视觉改动后**：Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）；真机观感（排版/高 DPI/动效手感）留用户日常使用复核
 - **提交前全量门禁**：冒烟 import（sidecar 入口）+ 全量探针 + 版本与 `base.json` 一致（前端另跑 `npm run build` + `cargo check`）
 - **静态检查工具现状**：Python 侧无 formatter/linter 挂载（ruff 未入 `.venv`）——引入时须先在本节登记并单独一次全量格式化提交（避免格式 diff 混入功能提交）；引入前排版以"代码约定"空格/行长条款为准
 
@@ -35,7 +34,7 @@
 - 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 sidecar/app.py（进程骨架特许：QCoreApplication/QObject/Signal）与 modules/playback（engine 的 QtMultimedia 播放特许 + progress 的 QTimer 特许，均为函数内延迟导入）**；Qt 界面层（原 ui/）已于 0.2.5 移除（副本存 `.archived/`）
 - `sidecar/` 侧车进程（PL006 定案）：stdio JSON Lines 协议对外暴露 modules/ 业务（信封定案见 z.plan 附录 PL006）；**modules/ 零改动纯委托**；协议编解码/常量单源 `sidecar/protocol.py`；命令表与错误分类单源 `sidecar/commands.py`；优雅退出 = stdin EOF（engine.stop 先行）；测试钩子 `--db/--config`（对称 set_db_path_for_tests 惯例，探针隔离不污染真实数据）；stdout 协议流零污染（日志走 stderr + 文件）
 - `tauri/` Tauri 壳（PL007 定案）：Rust 窗口 + WebView2 前端（Vite + Vue 3 + TS，源码 `tauri/src/`）+ Rust IPC 桥（`tauri/src-tauri/src/sidecar.rs`——dev spawn `.venv` python 直跑 sidecar、id 关联应答 60s 超时、崩溃指数退避重启×3→`sidecar://dead`）；**壳零业务**（全部转发 sidecar）；主题桥 = ui.json → CSS custom properties（配置单源不变）；**打包/安装器不做**（发布线 problems#4，`bundle.active=false`）；gitignore `tauri/node_modules|dist|src-tauri/target`
-- **单前端定案**（0.2.5 用户裁决，problems#5 闭环）：Qt 壳（原 `main.py` + `ui/`）已整体移除（副本存 `.archived/`），**Web 版（`tauri/` + `sidecar/`）为唯一前端**——功能差异对照 z.plan 附录 PL008 parity 清单；Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）
+- **单前端定案**（0.2.5 用户裁决）：Qt 壳（原 `main.py` + `ui/`）已整体移除（逐字副本存 `.archived/`），**Web 版（`tauri/` + `sidecar/`）为唯一前端**——功能差异对照 z.plan 附录 PL008 parity 清单；Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）
 - **WebView2 前端陷阱**（2026-11-08 实测）：①页面加载后 CSS/JS 走 vite HMR——HMR 断连或缓存陈旧会让"改了没反应"，排查先清 WebView2 数据目录（`%LOCALAPPDATA%\<identifier>\`）重启；②带 `overflow:auto` 的合成滚动容器可能盖住后续普通流层——右侧固定面板类布局用 **Grid 内联子项**（结构性占位，勿依赖 z-index）；③PrintWindow 截 WebView2 需 `PW_RENDERFULLCONTENT(0x2)` 且可能丢独立合成层——取证以多帧交叉为准
 - `modules/` 是**唯一可被未来复用的层**（前端只换 tauri/src/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
 - `modules/` 零 UI 依赖：禁止 import Qt GUI 类型（playback 的 QtMultimedia/QTimer 延迟导入为唯一播放特许）；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`sidecar/` 是对前端唯一翻译层（core 事件 → 协议事件）
@@ -143,6 +142,7 @@
 - **Tauri 壳侧车崩溃重启×3**（PL007 引入 / 2026-11-08 登记）：场景——侧车进程意外退出（崩溃/被杀/环境突变）；降级行为——指数退避（1s/2s/4s）自动重启最多 3 次，未决请求全部以 internal 信封落空；3 次耗尽发 `sidecar://dead` 事件，前端显示错误横幅并停止重试；理由——瞬时崩溃自愈、持续崩溃不无限循环，用户可感知
 - **Tauri 壳启动期侧车未就绪**（PL007 引入 / 2026-11-08 登记）：场景——前端 bootstrap 命令在侧车尚未完成启动时发出（窗口先于侧车就绪）；降级行为——Rust 桥 child 写柄为空时直接返回"侧车未运行"错误（同超时路径），前端加载态轮询直至 bootstrap 成功；理由——启动竞态不可避免，错误路径统一可重试
 - **Web 音效加载失败静默禁用**（PL009 引入 / 2026-11-08 登记）：场景——WebAudio 不可用/wav 拉取或解码失败（asset 缺失/无声卡）；降级行为——SoundKit 单例静默降级禁用（负缓存不重试），播放主链路不受影响；理由——音效为装饰层，与 Qt 版 SoundKit fail-soft 同语义平移
+- **播放计数写库失败静默降级**（PATCH003 引入 / 2026-11-08 登记）：场景——TRACK_CHANGED 驱动的 play_count 自增遇库故障（连接/写异常）；降级行为——记日志（含栈）后忽略，播放与事件推送不受影响；理由——计数为统计装饰层，不得反噬播放主链路
 
 ### 函数注释规则
 

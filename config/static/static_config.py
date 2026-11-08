@@ -15,19 +15,10 @@ _logger = logging.getLogger(__name__)
 # 合法日志级别值域（D0.2：log_level 值域校验，小写/非法级别名导入即崩）
 _VALID_LOG_LEVELS = frozenset(logging._nameToLevel.keys())
 
-# 数值键白名单（B2.4/C0.5/E0.1：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认）
+# 数值键白名单（B2.4/C0.5/E0.1：加载后逐键校验类型，非法 → 移除键 + 告警，消费点回退默认；
+# 窗口/缩略图/拖拽阈值等 Qt 壳参数已随单前端定案清理——ui.json 仅保留 Web 版实际消费键）
 _NUMERIC_BASE_KEYS = ("sample_rate", "channels")
-_NUMERIC_UI_KEYS = (
-    "window_width",
-    "window_height",
-    "thumbnail_size",
-    "shelf_thumbnail_size",
-    "record_widget_size",
-    "deck_widget_size",
-    "spin_tick_ms",
-    "progress_interval_ms",
-    "drag_threshold",
-)
+_NUMERIC_UI_KEYS = ("progress_interval_ms",)
 
 # 字符串键白名单（C0.5：log_level/music_dir 等非字符串会导致导入即崩）
 _STRING_BASE_KEYS = (
@@ -38,7 +29,7 @@ _STRING_BASE_KEYS = (
     "logs_dir",
     "log_level",
 )
-_STRING_UI_KEYS = ("font_family", "cover_image_filter")
+_STRING_UI_KEYS = ("font_family",)
 
 # 拟真度默认档位回退字面量（C2.4 单源：effects.json 缺 default_level 时的统一回退值）
 DEFAULT_REALISM_LEVEL = "refined"
@@ -54,10 +45,9 @@ def _fallback_level() -> str:
     return DEFAULT_REALISM_LEVEL
 
 
-# 容器内部数值键白名单（D0.1：animation.record_spin_ms 等嵌套数值键递归校验；
-# card_size=None 表示 list 容器元素全数值校验）
+# 容器内部数值键白名单（D0.1：容器键内部逐元素数值校验；
+# card_size=None 表示 list 容器元素全数值校验——animation 键已随死键清理移除）
 _NESTED_NUMERIC = {
-    "animation": ("record_spin_ms", "tonearm_drop_ms"),
     "card_size": None,
 }
 
@@ -248,7 +238,7 @@ def _load_static_config() -> StaticConfig:
                     data,
                     numeric_keys=_NUMERIC_UI_KEYS,
                     string_keys=_STRING_UI_KEYS,
-                    dict_keys=("animation", "colors"),
+                    dict_keys=("colors",),
                     list_keys=("card_size",),
                     nested_numeric=_NESTED_NUMERIC,
                 )

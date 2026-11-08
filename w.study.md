@@ -594,7 +594,7 @@ _本报告基于浅克隆 HEAD 研读；audacious 的插件侧（Winamp 皮肤�
 
 - **Tauri 2.x 架构**：Rust 壳进程（tauri::Builder）持有 WebView2（系统组件，Win10/11 自带，无需分发 Chromium）；前端跑在 WebView 内；壳与前端经 invoke（自定义 command）+ emit（事件）通信。对比 Electron 省约 100MB+ Chromium 分发；对比 Godot 保住 Python 业务层
 - **选型决定性理由**：modules/ 100% 复用——Godot 无法执行 Python（推翻"只换 ui/ 层"前提）；Web 端容错哲学与本项目一致（CSS 降级静默、结构上无段错误）
-- **双前端并存**：Qt 壳保留为迁移安全网；ui/ 与 tauri/src/ 共享 modules/ + config/ 单源；去留归 0.3 审计（problems#5）
+- **双前端并存 → 单前端定案**：迁移期 Qt 壳保留为安全网（ui/ 与 tauri/src/ 共享 modules/ + config/ 单源）；0.2.5 用户裁决移除 Qt 壳（逐字副本存 `.archived/`），Web 版为唯一前端
 
 ### 11.2 stdio 侧车桥（本方案核心机制）
 

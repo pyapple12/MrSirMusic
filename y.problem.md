@@ -29,7 +29,7 @@
   - 审计报告（z.plan.md 附录）独立递增：A001→A002→A003…
   - 落地：audit-report 取号规则维持"最后字母 +1"（无需改动）；当前已用 A001（第 1 轮审计报告）/ B（第 1 轮修复任务清单）
 - **落地记录（2026-08-15）**：
-  - `plan-task` / `prune-docs` 已创建于 .opencode/skills/（流程经 skillforge 质量审计 PASS）
+  - `plan-task` / `prune-docs` 已创建（流程经 skillforge 质量审计 PASS；初版建于 .opencode/skills/，2026-11-07 随技能库收录迁入 `.agents/skills/`，.opencode 旧副本已删除）
   - 编号规则补充定案：z.plan 方案章节用 **PL001 起递增**（与审计附录 A{NNN}、核心机制 1/2/3 三轨并存）
   - prune-docs 执行标准：参照 z.plan.md"观察项豁免定案清单"压缩模板（汇总提炼/权威源声明/原始记录不保留/防重复记账）
   - 用户裁决：命名维持项目惯例（动词开头）、单文件结构（无 README/templates），与既有 3 个 skill 一致
@@ -38,23 +38,15 @@
 
 ## 待评估 / 待实施
 
-3. **播放计数功能决策（写链已移除）**（2026-11-06 📌 待评估）：
+3. **播放计数功能决策（✅ 已拍板：方案 A 接线，PATCH003 落地）**（2026-11-06 📌 → 2026-11-08 ✅）：
 
-当前问题：`Item.play_count` 字段与 `items.play_count` 列自 A6 建成起全链零写入点（播放计数恒 0，详情面板恒显示"播放次数：0"）。FIX006.13（A006-P3-⑨）按默认决策移除了死写链（bump_play_count 方法 + update_item 的 play_count 写回）；字段与列保留读兼容（schema 不动）。
+原问题：`Item.play_count` 字段与 `items.play_count` 列自 A6 建成起全链零写入点（播放计数恒 0）。FIX006.13（A006-P3-⑨）按默认决策移除了死写链（bump_play_count 方法 + update_item 的 play_count 写回）；字段与列保留读兼容（schema 不动）。
 
-未来方案：
-
-- 方案 A（补接线）：若"播放计数"属产品承诺功能——`engine` 播放自然结束（ended）或手动切曲完成时 `item.play_count += 1` + `update_item`；需 engine 持有 Item 引用或经事件携带 item_id 回写
-- 方案 B（彻底移除）：删 items.play_count 列（需迁移 v2）+ Item.play_count 字段 + 详情面板"播放次数"行
-- 当前状态：写链已删、读链保留、功能冻结恒 0；详情面板的"播放次数"行随之失去意义，待方案拍板时一并处理
+拍板与落地（2026-11-08）：用户裁决 **方案 A 补接线**——`sidecar/app.py` Session 以 TRACK_CHANGED 驱动回写（`repository.increment_play_count` SQL 单列原子自增 + 会话缓存同步；载入首曲/自动切曲/手动切曲/翻面各计一次，暂停恢复与 seek 不计），Web 详情面板加回"播放次数"行；口径与本章方案 A 草案字面（"ended 或手动切曲完成"计）的偏差如实注记于 z.plan 附录 PATCH003（改"曲目开始"计——单点判定、防恢复/seek 重复计数）。计数写库失败降级登记 AGENTS 容错登记制。方案 B（迁移 v2 删列）不再需要。
 
 4. **Tauri 打包发布线（0.2 迁移完成后启动）**（2026-11-07 📌 待评估）[problems#4]：
 
 范围：PyInstaller 打 sidecar exe（PySide6+mutagen 捆绑；已知坑：隐藏 DLL 导入、体积预期 60–100MB）→ Tauri externalBin 接线替换 dev spawn + NSIS 安装包 + 自动更新与代码签名评估。触发条件：PL010 迁移收官、parity 稳定后单独立项（发布线 PL）。来源：PL006-PL010 立项讨论（用户定案 0.2 不含打包）。
-
-5. **Qt 壳（main.py GUI + ui/）去留裁决**（2026-11-07 📌→✅ 已裁决：移除）[problems#5]：
-
-现状（已闭环，2026-11-08）：用户裁决 **Qt 壳不要了，直接删除**——`ui/`（21 源码）+ `main.py` 已从仓库移除（逐字副本存 `.archived/` 本机存档，git 历史 9b57236 亦可达）；a9-a14 六支 Qt 探针退役；AGENTS 分层/入口/门禁条款同步改写（单前端定案成文）。连带处置：PySide6 保留（sidecar 播放引擎运行时依赖，QtMultimedia/QtCore 非 UI 用途）；parity 清单九项于 PL008/PL009 完成后全数覆盖，无功能缺口。
 
 6. **Web Audio 直驱播放评估（0.3 优化线）**（2026-11-07 📌 待评估）[problems#6]：
 

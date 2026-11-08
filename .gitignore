@@ -14,8 +14,9 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# 锚定根目录（原裸 lib/ 会吞任意层级 lib 目录——曾误伤前端源码 tauri/src/lib/，PATCH002 修正）
+/lib/
+/lib64/
 parts/
 sdist/
 var/

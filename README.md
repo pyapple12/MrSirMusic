@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.2.5-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.2.6-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
@@ -16,7 +16,7 @@ Windows 拟物音乐播放器（Python sidecar + Tauri/Web 前端）：不使用
 
 - [快速开始](#快速开始)
 - [使用说明](#使用说明)
-- [Web 版](#web-版)
+- [技术架构](#技术架构)
 - [项目结构](#项目结构)
 - [许可证](#许可证)
 
@@ -26,7 +26,7 @@ Windows 拟物音乐播放器（Python sidecar + Tauri/Web 前端）：不使用
 
 - Windows 10/11
 - Python 3.14 或更高版本
-- pip（Python 包管理器）
+- Rust toolchain（[rustup](https://rustup.rs) 安装）与 Node.js 22+（Tauri 壳与前端构建所需）
 
 ### 安装
 
@@ -41,7 +41,7 @@ py -3.14 -m venv .venv
 
 ## 使用说明
 
-### 图形界面（Web 版）
+### 图形界面（Web 版，唯一前端）
 
 ```bash
 cd tauri
@@ -49,11 +49,11 @@ npm install
 npm run app        # 一键起 Tauri 窗口 + Python sidecar
 ```
 
-> 注意：`.venv` 是机器绑定的，换机器后需按上面流程重建虚拟环境；Rust/Node 前置见下方 Web 版说明。
+> 注意：`.venv` 是机器绑定的，换机器后需按上面流程重建虚拟环境。
 
 ### 生成物品
 
-1. 菜单 **文件 → 导入/生成物品…**
+1. 点击顶部 **导入/生成…** 按钮
 2. 选择音频文件（mp3/flac/wav/m4a，支持多选）
 3. 选择载体类型（黑胶 22 分钟/面、磁带 30 分钟/面、CD 80 分钟/面）
 4. 填写名称与 Tag（Tag 用于置物架分组陈列）
@@ -63,7 +63,7 @@ npm run app        # 一键起 Tauri 窗口 + Python sidecar
 
 ### 播放
 
-- 双击置物架卡片 / 物品库右键"播放" / 拖动物品卡片到唱机区域
+- 单击置物架卡片 / 物品库右键"播放" / 拖动物品卡片到唱机区域
 - 唱机随载体切换拟物形态：黑胶 → 转盘唱针（可拖拽寻曲）、磁带 → 磁带仓（观察窗卷轴）、CD → 碟舱
 - 播放/暂停、上下曲、翻面按钮与进度滑条（可直接拖动寻曲）
 - 键盘快捷键：`空格` 播放/暂停、`←`/`→` 上一首/下一首、`F` 翻面
@@ -74,21 +74,11 @@ npm run app        # 一键起 Tauri 窗口 + Python sidecar
 
 ### 设置（拟真度）
 
-菜单 **设置 → 设置…**：拟真度档位（简洁/精致/真实——磨损贴图、转盘动画与拟真音效强度）与自动翻面，保存后重启保持。
+点击顶部 **设置…** 按钮：拟真度档位（简洁/精致/真实——磨损贴图、转盘动画与拟真音效强度）与自动翻面，保存后重启保持。
 
-## Web 版（开发中）
+## 技术架构
 
-Tauri + Web 前端 + Python sidecar 的迁移版（PL007 起，方案见 `z.plan.md` 附录 PL006–PL010）。业务逻辑与 Qt 版完全共享（`modules/` + `sidecar/` 进程），前端独立于 `tauri/`。
-
-**前置**：Rust toolchain（rustup）+ Node.js 22+；**运行**：
-
-```bash
-cd tauri
-npm install
-npm run tauri dev
-```
-
-当前完成度：物品库与置物架双视图、导入对话框（原生文件多选/四分组/业务错误提示）、设置对话框（三档与自动翻面）、卡片拖入唱机播放、快捷键（空格/←/→/F）、**拟物唱机三形态 Web 化**（黑胶贴图转盘+唱针拖拽寻曲/磁带卷轴飞轮/CD 碟面环带、scrub 寻曲、Web Audio 拟真音效、磨损风化叠加）、侧车崩溃自动重启。打包安装器不做（后续发布线）。
+Tauri 2 桌面壳（Rust + WebView2）+ Vue 3/TypeScript 前端（`tauri/src/`）+ Python sidecar 后端进程（`sidecar/`，stdio JSON Lines 协议）。业务与播放核心在 `modules/`（零 UI 依赖），由 sidecar 进程承载、Rust IPC 桥转发，前端为可替换层；主题经 `config/static/ui.json` → CSS 变量单源注入；侧车崩溃自动重启（指数退避）。离线优先，无联网依赖；打包/安装器未做（后续发布线，见 `y.problem.md`）。
 
 ## 项目结构
 
@@ -105,6 +95,7 @@ MrSirMusic/
 ├── sidecar/                   # 侧车进程（stdio JSON Lines 协议暴露业务 + 播放引擎，Web 版后端）
 ├── config/                    # 配置（静态 json 驱动 + 用户配置）
 ├── tauri/                     # Web 前端（Vite+Vue3+TS）+ Rust 壳（src-tauri/，IPC 桥）
+├── data/                      # 静态资源（Blender 烘焙贴图 textures/ + 合成音效 sounds/ + 占位图）
 ├── utils/                     # 通用工具（零业务依赖）
 ├── music/                     # 物品库用户核心数据（items.db + covers/，gitignore 内容）
 ├── requirements.txt           # Python 依赖列表

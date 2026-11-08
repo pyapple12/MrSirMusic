@@ -1,7 +1,7 @@
 # MrSirMusic 项目方案 v1.0
 
 - 方案定稿：2026-08-14
-- 状态：📌 待开发（任务清单见 x.progress.md）
+- 状态：✅ 已交付（v1.0 于 0.1 线收官落地；0.2 迁移线 PL006–PL010 完成后 Qt 壳移除，Web 版为唯一前端——**现状架构以 `AGENTS.md`「结构与约定」为准，本文正文与附录均为历史设计记录**）
 - 前置研读：同目录 `w.study.md`（webamp / audacious / RetroMusicPlayer / kelp-player / SpotAmp 五仓库深度报告，本方案沿用其架构模式）
 
 ---
@@ -59,6 +59,8 @@
 | 需求标签 | `Tag`      | 生成物品时用户赋予的分类（如"深夜"），置物架按此分类     |
 
 ## 五、目录结构规范
+
+> 历史注记（2026-11-08）：下图为 v1.0（PySide6 单进程）时代的结构规划——`main.py` 与 `ui/` 已于 0.2.5 随 Qt 壳移除（逐字副本存 `.archived/`），现状分层为 `utils/ → config/ → modules/ → sidecar/ + tauri/`，以 `AGENTS.md`「结构与约定」为准。
 
 ```
 MrSirMusic/
@@ -525,6 +527,52 @@ Track: path / title / artist / album / duration(秒) / format
 - 后续线登记定案：problems#4 打包发布线 / problems#5 Qt 壳去留 / problems#6 Web Audio 直驱（本立项时预登记，PL010.4 核对）
 - 版本定案：收口推进 `0.2.4`
 
+> 后续修正（PATCH001，0.2.5）：dev 启动路径固化为 **`npm run app`**（package.json script 别名，等价 `tauri dev`）；Qt 壳去留已裁决为**移除**（problems#5 闭环，逐字副本存 `.archived/`）——上方两条定案以本注记为准，原文留档。
+
 **明确不做**：打包/安装器/自动更新/代码签名（problems#4）；删除 Qt 壳（problems#5）；性能优化与深度测试（0.3 线既定输入）。
 
 **实施与证据**：逐条做法与验证见 x.progress.md「PL010」组。
+
+## 附录 PATCH002：ui.json 死键清理（2026-11-08 立项）
+
+**背景**：单前端定案后的文档对齐复查发现——`ui.json` 仍保留 Qt 壳时代参数 11 键，Web 前端零消费（`deckMath.ts` 动画常量硬编码自 Qt 版移植，注释却称"ui.json 缺省"）；死参数留档会误导调参与审计（违反参数外置纪律的反面：参数必须有消费方）。
+
+**范围定案**：
+- 删 `config/static/ui.json` 死键 11 处：`window_width` / `window_height` / `animation`（含 `record_spin_ms` + `tonearm_drop_ms`）/ `thumbnail_size` / `shelf_thumbnail_size` / `drag_threshold` / `record_widget_size` / `deck_widget_size` / `spin_tick_ms` / `cover_image_filter`
+- 保留活键 4 处（逐键 grep 定案）：`font_family`（theme.ts）/ `colors`（theme.ts）/ `card_size`（ShelfView.vue）/ `progress_interval_ms`（sidecar progress.py）
+- `config/static/static_config.py` 白名单同步：`_NUMERIC_UI_KEYS` / `_STRING_UI_KEYS` / `_NESTED_NUMERIC` / `_load_static_config` 的 ui `dict_keys`
+- `.temp/probe_a1_config.py` A1.4 断言改写（四活键）+ 死键反向断言（存在即 FAIL，防回归）
+- `tauri/src/lib/deckMath.ts` `TONEARM_DROP_MS` 注释如实化（常量唯一事实源）
+- `.gitignore` 裸 `lib/` 规则锚定为 `/lib/`——执行复查时发现该模板规则误吞前端源码 `tauri/src/lib/` 五文件（deckMath/ipc/sounds/theme/types，自 PL007 起从未入库，clone 侧前端无法编译）；全项目扫描确认无其他被误忽略源文件
+
+**明确不做**：`base.json` 版本推进（纯清理无内容增量，Z 不动，R 随提交历史）；为 animation 键做前端接线（无调参场景，硬编码常量即事实源）；清理 Python 模板中其余未肇事的构建产物规则（build/dist 等无实际冲突，留档）。
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PATCH002」组。
+
+## 附录 PATCH003：播放计数接线（2026-11-08 立项，用户拍板方案 A）
+
+**背景**：`items.play_count` 列与 `Item.play_count` 字段自 A6 建成全链零写入（恒 0）；FIX006.13 删死写链后字段/列保留读兼容，决策备忘 y.problem 条目 3。用户拍板 **方案 A 补接线**。
+
+**口径定案**：TRACK_CHANGED 驱动——**每开始播一首计一次**（载入首曲 / 自动切曲 / 手动切曲 / 翻面各计；暂停恢复与 seek 不发该事件故不计）。与 y.problem 方案 A 草案字面（"ended 或手动切曲完成"）的偏差如实注记：改为"曲目开始"计而非"曲目终结"计——单点判定无歧义、防重复（恢复/seek 不重计），数字语义 = 累计播过曲目数（主流播放器口径）。
+
+**范围定案**：
+- `modules/library/repository.py` 新增 `increment_play_count(item_id) -> bool`：SQL 单列原子自增（`play_count = play_count + 1`），不经内存 Item 全量写回——杜绝陈旧缓存值经 `save_item`/`update_item` 覆盖计数
+- `sidecar/app.py` Session：增 `current_item_id` 锚点 + `_on_track_changed` 回写订阅（TRACK_CHANGED 独立订阅，与前端泵并行）；写库失败降级日志一次（AGENTS 容错登记制补登记）
+- `sidecar/commands.py`：`_cmd_load_item` 先记锚点再 load（load 内部即发 TRACK_CHANGED）；`_item_to_dict` 增 `play_count` 字段
+- 前端：`types.ts` ItemDict 增 `play_count`；`LibraryView.vue` 详情面板加回"播放次数：N"行（PL008.1 曾省略——拍板后功能成立）
+- 探针：a15 增 4.5 段（load/play 后 `list_items` 读回断言 `play_count ≥ 1`，端到端验证落库）
+- **明确不做**：计数变化不发 `library_changed` 事件（统计字段不触发全量刷新——详情面板数字在下次选中/刷新可见，不实时跳动）；engine 层不持 Item 引用（回写归 sidecar，播放核心零业务依赖不变）
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PATCH003」组。
+
+## 附录 PATCH004：空 A 面面序拦截（2026-11-08 立项，用户拍板"拦"）
+
+**背景**：A006 观察项（"需产品定案"）——空 A 面 + B 有曲物品可造出（`check_item` 不拦），拟物面序物理语义不成立。用户拍板 **拦截**。
+
+**范围定案**：
+- `modules/rules/generate_check.py` `check_item` 补第四项检查：非空面集合非空且不含 "A" → 追加"A 面为空而其他面有曲（面序不成立）"——生成端顺序分配器先填 A 造不出该态，本规则拦编辑/未来写链路径；engine 侧 F3.1 已容忍该态不崩（boundary=0 整队列视作 A 面），本规则是语义层把关而非崩溃防御
+- 生效面：生成（A8 编排调 check_item）/ 编辑 `remove_track` 删空 A 面（F2.1 回滚链自动拒绝）/ `regenerate`（重分配先填 A，规则为防御兜底）
+- 探针：a5 增面序三断言（空 A+B 有曲拒绝 / 全空物品走原"空物品"文案不误触发 / 正常 AB 物品不误伤）
+- **明确不做**：Web 编辑命令不含删歌（PL008 parity 范围仅改名/改 Tag），无需前端拦截 UI；engine/queue 层不动（容忍语义保留）
+
+**实施与证据**：逐条做法与验证见 x.progress.md「PATCH004」组。

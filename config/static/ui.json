@@ -1,6 +1,4 @@
 {
-  "window_width": 1100,
-  "window_height": 720,
   "font_family": "Microsoft YaHei",
   "colors": {
     "primary": "#8B6F47",
@@ -16,17 +14,6 @@
     "muted": "#9A938A",
     "disabled": "#45403A"
   },
-  "animation": {
-    "record_spin_ms": 2000,
-    "tonearm_drop_ms": 500
-  },
-  "thumbnail_size": 32,
-  "shelf_thumbnail_size": 56,
   "card_size": [128, 128],
-  "drag_threshold": 8,
-  "record_widget_size": 200,
-  "deck_widget_size": 220,
-  "spin_tick_ms": 30,
-  "progress_interval_ms": 1000,
-  "cover_image_filter": "*.png *.jpg *.jpeg *.bmp"
+  "progress_interval_ms": 1000
 }
