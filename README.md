@@ -1,6 +1,6 @@
 # MrSirMusic —— 拟物音乐播放器
 
-[![Version](https://img.shields.io/badge/Version-0.2.3-blue.svg)](../../releases)
+[![Version](https://img.shields.io/badge/Version-0.2.4-blue.svg)](../../releases)
 
 > 版本口径：徽章 = 代码版本（三段式 `X.Y.Z`，与 `config/static/base.json` 即时同步）；发布版本以 GitHub Releases 为准；commit 标题用四段式 `VX.Y.Z.R`（修订号只进提交历史，口径见 `AGENTS.md`"版本双轨"）。
 [![Python](https://img.shields.io/badge/Python-3.14+-green.svg)](https://www.python.org)
@@ -95,8 +95,8 @@ npm run tauri dev
 
 ```
 MrSirMusic/
-├── main.py                    # 主入口：GUI 分发，版本号 VERSION 单一来源（base.json version 字段）
-├── modules/                   # 业务核心层（无 GUI 依赖，可独立复用）
+├── main.py                    # 主入口：Qt 版 GUI 分发，版本号单一来源（base.json version 字段）
+├── modules/                   # 业务核心层（无 GUI 依赖，双前端共享复用）
 │   ├── items/                 # 领域模型（黑胶/磁带/CD 物品）
 │   ├── rules/                 # 规则引擎（容量预算/AB面语义）
 │   ├── generator/             # 生成编排（选歌 → 物品）
@@ -104,8 +104,10 @@ MrSirMusic/
 │   ├── tagging/               # 标签解析（置物架分类）
 │   ├── cover/                 # 封面服务（占位图兜底）
 │   └── playback/              # 播放核心（引擎 + decoders 子包）
+├── sidecar/                   # 侧车进程（stdio JSON Lines 协议暴露业务，Web 版后端）
 ├── config/                    # 配置（静态 json 驱动 + 用户配置）
-├── ui/                        # 界面层（唯一允许 import PySide6 的层）
+├── ui/                        # Qt 界面层（双前端并存期安全网，去留待 0.3 审计裁决）
+├── tauri/                     # Web 前端（Vite+Vue3+TS）+ Rust 壳（src-tauri/，IPC 桥）
 ├── utils/                     # 通用工具（零业务依赖）
 ├── music/                     # 物品库用户核心数据（items.db + covers/，gitignore 内容）
 ├── requirements.txt           # Python 依赖列表

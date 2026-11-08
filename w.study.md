@@ -587,3 +587,34 @@ release/                  go-librespot（17MB ELF）、spotamp 二进制、confi
 ---
 
 _本报告基于浅克隆 HEAD 研读；audacious 的插件侧（Winamp 皮肤解析、gtkui/qtui、跨淡插件）在独立仓库 audacious-plugins 中，核心侧交叉点为 `PluginHandle` 与 `aud_plugin_get_header()`，如需可另行克隆研究。_
+
+## 11. Tauri 迁移研读（PL006-PL010，2026-11-08）
+
+### 11.1 进程模型与选型依据
+
+- **Tauri 2.x 架构**：Rust 壳进程（tauri::Builder）持有 WebView2（系统组件，Win10/11 自带，无需分发 Chromium）；前端跑在 WebView 内；壳与前端经 invoke（自定义 command）+ emit（事件）通信。对比 Electron 省约 100MB+ Chromium 分发；对比 Godot 保住 Python 业务层
+- **选型决定性理由**：modules/ 100% 复用——Godot 无法执行 Python（推翻"只换 ui/ 层"前提）；Web 端容错哲学与本项目一致（CSS 降级静默、结构上无段错误）
+- **双前端并存**：Qt 壳保留为迁移安全网；ui/ 与 tauri/src/ 共享 modules/ + config/ 单源；去留归 0.3 审计（problems#5）
+
+### 11.2 stdio 侧车桥（本方案核心机制）
+
+- **通道选型**：stdio JSON Lines 而非 localhost HTTP——免 Windows 防火墙首启弹窗、免端口冲突；Tauri plugin-shell 原生支持 spawn+stdin/stdout 流
+- **Rust 桥要点**（sidecar.rs）：CommandChild 写柄（stdin）+ CommandEvent 流（stdout 逐行）；id 自增 + HashMap<u64, mpsc::Sender> 关联应答（60s 超时清表）；崩溃指数退避重启×3（1s/2s/4s）→ sidecar://dead；RunEvent::Exit 杀子进程（sidecar 自身 stdin EOF 优雅退出兜底）
+- **线程模型**（sidecar 侧）：stdin 守护线程按行读 → Qt 信号排队到主线程；命令分发/响应/事件写全在主线程（QMediaPlayer/ProgressReporter 的 Qt 对象纪律）；stdout 单写锁 + 逐行 flush
+- **关键陷阱实录**：①spawn exe 路径用 `current_exe().parent()` 向上锚定 .venv（dev 模式 exe 在 src-tauri/target/debug）；②Python 侧 stdout 必须 `bufsize=1` + `flush()`（管道全缓冲会让父进程读不到——a15 红灯证据）；③事件经 Qt 信号跨线程排队，杜绝锁竞争
+
+### 11.3 WebView2 前端三陷阱（全部实测留档）
+
+- **icon 资源**：tauri-build 的 Windows 资源编译走 RC.EXE（老编译器）——不吃 PNG-in-ICO 新格式，手造 BMP-DIB 也被拒（两次 RC2176）；唯一稳路 = 官方 `npx tauri icon <源图>` 全套生成（icon_source.png 256px 起步）
+- **vite watcher**：src-tauri/target 构建产物在 vite 监视树内会 EBUSY 崩溃——`server.watch.ignored` 必须排除
+- **合成滚动层序**：带 overflow:auto 的容器会被提升为合成滚动层，**盖住后续普通流 fixed/普通层**（z-index/translateZ 均无效）——右侧固定面板用 **Grid 内联子项**（结构性占位）根治
+- **截图取证**：PrintWindow 需 PW_RENDERFULLCONTENT(0x2) 且可能丢独立合成层；TOPMOST + CopyFromScreen 为真实所见帧；**PS5.1 脚本必须 ASCII-only**（无 BOM 中文注释被 GBK 误读吞换行——v1-v3 诡异失败根因）；Add-Type 稳妥走预编译 DLL
+- **运行时验证法**：无 devtools 时用 chrome headless `--dump-dom` + grep 结构断言（无目测审核定案）；调试期全局 errorHandler 把错误渲染进页面
+
+### 11.4 Rust 侧并发与 API 备忘（第一手踩坑）
+
+- `tauri::async_runtime::spawn` 返回 JoinHandle——丢弃需 `let _join =` 绑定
+- `CommandEvent` 标注 non_exhaustive——match 必须带 `_` 通配
+- `#[tauri::command]` 函数需 `pub`（宏生成可见性依赖）
+- `AppHandle.state::<T>()` 需导入 `tauri::Manager` trait
+- Python 3.14 + PySide6 下 **中文 UI 的 Blender**：新材质默认节点名本地化——按 `node.type`（如 BSDF_PRINCIPLED）取节点而非按名

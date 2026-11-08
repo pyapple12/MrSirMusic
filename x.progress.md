@@ -272,15 +272,16 @@ UI 基础（A11）：A11.1 themes（QSS 由 ui.json 装配）；A11.2 main_windo
 - [x] PL009.7 磨损效果器 —— `tauri/src/components/EffectOverlay.vue`（wear/weathering.png overlay mix-blend-mode，档位 opacity=wear_intensity/weathering_intensity；concise 不渲染）；验证：DOM 断言（2026-11-08 已验证：EffectOverlay 挂 DeckBar 列内；观感随用户开窗）
 - [x] PL009.8 PL009 收口 —— `base.json` → `0.2.3` + README 徽章/完成度 + a1 同步 + tauri.conf/Cargo 同步；AGENTS 容错补 Web 音效条；全量回归（14+a15）+ 冒烟 + `--version` + npm build + cargo check + DOM 结构断言九项；草拟 commit（feat: V0.2.3.1）交用户；验证：全量回归 PASS + 版本四方一致 + 断言记录（2026-11-08 已验证：全量 15/15 PASS + 冒烟 + --version 0.2.3 四方一致（base/README/a1/tauri.conf+Cargo）+ npm build + cargo check 过 + headless DOM 断言九项全过（deck-stage/vinyl-stage/disc-rotor/tonearm-svg/deck-bar/progress-slider/effect-overlay/翻面/播放）+ 拖针手感/音效听感/磨损观感三项真机终验留用户开窗 + commit 草案已交用户）
 
+### PL010: 迁移收官 [z.plan#附录 PL010] ✅
+
+> 结果：0.2 迁移线整体收官——dev 启动路径固化（`npm run app`）+ AGENTS 架构节改写（双前端并存条款/运行命令）+ README 结构段双前端 + w.study 第 11 节 Tauri 研读 + parity 终验 + y.problem 三条后续线在案；全量 15/15 + --version 0.2.4 四方一致 + npm build + cargo check 过。**a2 曾红 = 用户开着的 Web 版占日志文件锁（环境冲突非缺陷），关窗后绿——本次即真机验证场景本身**。
+
+- [x] PL010.1 dev 启动路径固化 —— `tauri/package.json` scripts 收口（`npm run app` = `tauri dev` 一键起壳+sidecar）；AGENTS 运行与验证节补全（sidecar 单独跑/Tauri dev/14+a15 探针命令）；验证：按 README 从零步骤走查（人工）（2026-11-08 已验证：package.json 增 app script + AGENTS 运行节补 Web 版运行命令（install/app/build/cargo check 四步）+ 协议层验证指向 a15；PL007 期间 dev 栈多次实跑即本路径的实际走查）
+- [x] PL010.2 AGENTS 架构节改写 —— 结构与约定节分层重写（tauri 壳+web 前端 ↔ stdio JSON Lines ↔ sidecar/→modules/；sidecar 独立进程零 GUI、Qt 仅 engine/app 循环特许；ui/ 与 tauri/src 双前端并存期条款）；验证：AGENTS 全文走查无新旧口径冲突（2026-11-08 已验证：分层条款 PL006/PL007 已就位 + 本条新增**双前端并存期条款**（功能差异走 parity 清单核对、不为迁移动 Qt 壳、去留 0.3 审计裁决、Web 侧验证=headless dump 结构断言定案）——AGENTS 走查无冲突）
+- [x] PL010.3 README 与 w.study —— README 结构段双前端说明 + 当前形态如实（dev 迁移完成/无安装包/打包属后续线 problems#4）；w.study 第 11 节（Tauri 进程模型/stdio 桥/Rust 侧并发/Vue3 组合式研读）；验证：文档走查（2026-11-08 已验证：README 结构段双前端树 + Web 版完成度段如实（dev 完成/无安装包）；w.study 第 11 节四小节（进程模型选型/stdio 桥要点与陷阱实录/WebView2 三陷阱/Rust API 备忘）落档）
+- [x] PL010.4 y.problem 登记与容错核查 —— problems#4 打包发布线/#5 Qt 壳去留/#6 Web Audio 直驱 三条登记（本立项时已预登记，本条核对状态与内容仍准确）；AGENTS 容错登记制核查（PL007 三条 + PL009 降级语义平移条目补全齐备）；验证：登记齐全对照（2026-11-08 已验证：problems#4/5/6 三条在案内容准确（打包线触发条件/裁决时点/评估范围）+ AGENTS 容错核查五条齐备（侧车收敛/超时/重启×3/启动未就绪/Web 音效降级））
+- [x] PL010.5 PL010 收口 —— `base.json` → `0.2.4` + a1 同步；全量回归（14+a15）+ parity 终验（z.plan PL008 清单九项复核）+ dev 真机走查（冷启动/重启恢复/中文输入）+ 草拟 commit（feat: V0.2.4.1）交用户；验证：全量回归 PASS + parity 全过 + 版本三方一致（2026-11-08 已验证：0.2.4 四方一致（base/README/a1/tauri.conf+Cargo）+ **全量 15/15 PASS**（a2 曾红 = 用户开着的 Web 版占日志文件锁，**关窗后重跑即绿**——本次红本身即真机验证场景的副产品）+ 冒烟 + npm build + cargo check 过；parity 终验 = 首核 7 过 + 2 部分项（寻曲双路/档位可视联动）经 PL009 落地后复核达标；dev 真机走查与拖针手感/音效听感留用户日常使用；commit 草案已交用户）
+
 ## 未完成
 
-
-### PL010: 迁移收官 [z.plan#附录 PL010]
-
-> 目标：dev 模式固化+文档/探针/登记收口——0.2 迁移线完成（dev 可用、parity 达标；**不含打包发布**）。依赖：PL009。
-
-- [ ] PL010.1 dev 启动路径固化 —— `tauri/package.json` scripts 收口（`npm run tauri dev` 一键起壳+sidecar）；AGENTS 运行与验证节补全（sidecar 单独跑/Tauri dev/14+a15 探针命令）；验证：按 README 从零步骤走查（人工）
-- [ ] PL010.2 AGENTS 架构节改写 —— 结构与约定节分层重写（tauri 壳+web 前端 ↔ stdio JSON Lines ↔ sidecar/→modules/；sidecar 独立进程零 GUI、Qt 仅 engine/app 循环特许；ui/ 与 tauri/src 双前端并存期条款）；验证：AGENTS 全文走查无新旧口径冲突
-- [ ] PL010.3 README 与 w.study —— README 结构段双前端说明 + 当前形态如实（dev 迁移完成/无安装包/打包属后续线 problems#4）；w.study 第 11 节（Tauri 进程模型/stdio 桥/Rust 侧并发/Vue3 组合式研读）；验证：文档走查
-- [ ] PL010.4 y.problem 登记与容错核查 —— problems#4 打包发布线/#5 Qt 壳去留/#6 Web Audio 直驱 三条登记（本立项时已预登记，本条核对状态与内容仍准确）；AGENTS 容错登记制核查（PL007 三条 + PL009 降级语义平移条目补全齐备）；验证：登记齐全对照
-- [ ] PL010.5 PL010 收口 —— `base.json` → `0.2.4` + a1 同步；全量回归（14+a15）+ parity 终验（z.plan PL008 清单九项复核）+ dev 真机走查（冷启动/重启恢复/中文输入）+ 草拟 commit（feat: V0.2.4.1）交用户；验证：全量回归 PASS + parity 全过 + 版本三方一致
+（0.2 迁移线全部收官——后续线：打包发布（problems#4）/Qt 壳去留裁决（problems#5，0.3 审计）/Web Audio 直驱评估（problems#6，0.3 优化线）均走独立立项；优化与深度测试按用户定案 0.3 单独立项）

@@ -8,7 +8,8 @@
 - 没有测试/lint 命令。改动后验证：`.\.venv\Scripts\python.exe -c "import main, modules.items, modules.rules, modules.generator, modules.library, modules.tagging, modules.cover, modules.playback.engine, modules.playback.events, config.settings, config.static.static_config, ui.main_window, ui.bridge.event_bridge, ui.themes, utils.logger, utils.file_utils, utils.retry, utils.convert"`。不要直接跑 GUI 验证（会弹窗阻塞）
 - 全量探针回归（.temp/probe_*.py，offscreen）：`$env:QT_QPA_PLATFORM="offscreen"; foreach ($p in @('probe_a1_config','probe_a2_utils','probe_a3_items','probe_a4_tagging','probe_a5_rules','probe_a6_library','probe_a7_cover','probe_a8_generator','probe_a9_playback','probe_a10_bridge','probe_a11_ui','probe_a12_widgets','probe_a13_effects','probe_a14_integration','probe_a15_sidecar')) { .\.venv\Scripts\python.exe .temp\$p.py | Select-Object -Last 1 }`——每轮改动后跑全量回归（a15 为子进程协议探针，非 offscreen 依赖，随批回归）
 - GUI 无头初始化验证（不弹窗）：`$env:QT_QPA_PLATFORM="offscreen"; .\.venv\Scripts\python.exe -c "from PySide6.QtWidgets import QApplication; from ui.main_window import MainWindow; app = QApplication([]); w = MainWindow(); print('GUI init OK')"`
-- 依赖（`requirements.txt`）：PySide6、mutagen 等，按需添加（见 z.plan.md）
+- Web 版运行（PL007 双入口，dev 模式）：`cd tauri; npm install; npm run app`——tauri dev 一键起壳 + dev spawn `.venv` python 直跑 sidecar；`npm run build`（tauri 内）验证前端编译；`cargo check`（src-tauri 内）验证 Rust 侧；协议层单独验证 = a15 探针（见上）；打包不做（发布线 problems#4）
+- 依赖（`requirements.txt`）：PySide6、mutagen 等，按需添加（见 z.plan.md）；Web 前端依赖走 `tauri/package.json`（npm，不入 requirements）
 
 ## 环境陷阱
 
@@ -35,6 +36,7 @@
 - 包结构按依赖单向分层：`utils/`（通用工具，零业务依赖）→ `config/`（配置）→ `modules/`（业务核心，零 GUI 依赖）→ `ui/`（界面）与 `sidecar/`（侧车进程，PL006）——**允许 import PySide6 的仅 ui/ 与 sidecar/app.py 两处**（sidecar 仅 QtCore 无 GUI：QCoreApplication/QObject/Signal 进程骨架特许）
 - `sidecar/` 侧车进程（PL006 定案）：stdio JSON Lines 协议对外暴露 modules/ 业务（信封定案见 z.plan 附录 PL006）；**modules/ 零改动纯委托**；协议编解码/常量单源 `sidecar/protocol.py`；命令表与错误分类单源 `sidecar/commands.py`；优雅退出 = stdin EOF（engine.stop 先行）；测试钩子 `--db/--config`（对称 set_db_path_for_tests 惯例，探针隔离不污染真实数据）；stdout 协议流零污染（日志走 stderr + 文件）
 - `tauri/` Tauri 壳（PL007 定案）：Rust 窗口 + WebView2 前端（Vite + Vue 3 + TS，源码 `tauri/src/`）+ Rust IPC 桥（`tauri/src-tauri/src/sidecar.rs`——dev spawn `.venv` python 直跑 sidecar、id 关联应答 60s 超时、崩溃指数退避重启×3→`sidecar://dead`）；**壳零业务**（全部转发 sidecar）；主题桥 = ui.json → CSS custom properties（配置单源不变）；**打包/安装器不做**（发布线 problems#4，`bundle.active=false`）；gitignore `tauri/node_modules|dist|src-tauri/target`
+- **双前端并存期条款**（PL010 定案）：Qt 版（`main.py` + `ui/`）与 Web 版（`tauri/` + `sidecar/`）共用 `modules/` 业务与 `config/` 单源——功能差异一律走 parity 清单核对（z.plan 附录 PL008），不为迁移动 Qt 壳；Qt 壳去留由 0.3 首轮审计裁决（problems#5）；Web 侧运行时验证 = headless 浏览器 `--dump-dom` + 结构断言（不做目测审核，2026-11-08 用户定案）
 - **WebView2 前端陷阱**（2026-11-08 实测）：①页面加载后 CSS/JS 走 vite HMR——HMR 断连或缓存陈旧会让"改了没反应"，排查先清 WebView2 数据目录（`%LOCALAPPDATA%\<identifier>\`）重启；②带 `overflow:auto` 的合成滚动容器可能盖住后续普通流层——右侧固定面板类布局用 **Grid 内联子项**（结构性占位，勿依赖 z-index）；③PrintWindow 截 WebView2 需 `PW_RENDERFULLCONTENT(0x2)` 且可能丢独立合成层——取证以多帧交叉为准
 - `modules/` 是**唯一可被未来复用的层**（Web / Godot 后续计划只换 ui/ 层）；模块按单一职责细拆：items（领域模型）、rules（规则引擎）、generator（生成编排）、library（物品库持久化）、tagging（标签解析）、cover（封面服务）、playback（播放核心 + decoders 子包）
 - `modules/` 零 UI 依赖：禁止 import PySide6/Qt 任何类型；领域事件契约独立于 Qt（`modules/playback/events.py` 仅事件名 + 数据结构），`ui/bridge/` 是唯一翻译层（core 事件 → Qt 信号）
